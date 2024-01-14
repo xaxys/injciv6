@@ -1,0 +1,31 @@
+object Formain: TFormain
+  Left = 333
+  Height = 240
+  Top = 250
+  Width = 320
+  BorderIcons = [biSystemMenu, biMinimize]
+  BorderStyle = bsSingle
+  Caption = '辅助工具'
+  ClientHeight = 240
+  ClientWidth = 320
+  DesignTimePPI = 120
+  OnCreate = FormCreate
+  object ButtonInject: TButton
+    Left = 88
+    Height = 47
+    Top = 48
+    Width = 150
+    Caption = '注入进程'
+    OnClick = ButtonInjectClick
+    TabOrder = 0
+  end
+  object ButtonLAN: TButton
+    Left = 88
+    Height = 47
+    Top = 124
+    Width = 150
+    Caption = '局域网测试'
+    OnClick = ButtonLANClick
+    TabOrder = 1
+  end
+end

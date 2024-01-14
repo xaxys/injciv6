@@ -1,0 +1,45 @@
+object FormLANTest: TFormLANTest
+  Left = 333
+  Height = 400
+  Top = 250
+  Width = 497
+  BorderIcons = [biSystemMenu, biMinimize]
+  Caption = '局域网测试'
+  ClientHeight = 400
+  ClientWidth = 497
+  DesignTimePPI = 120
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  LCLVersion = '2.2.4.0'
+  object MemoLog: TMemo
+    Left = 0
+    Height = 360
+    Top = 40
+    Width = 497
+    Align = alClient
+    ReadOnly = True
+    ScrollBars = ssAutoBoth
+    TabOrder = 1
+    WordWrap = False
+  end
+  object PanelTools: TPanel
+    Left = 0
+    Height = 40
+    Top = 0
+    Width = 497
+    Align = alTop
+    BevelOuter = bvNone
+    ClientHeight = 40
+    ClientWidth = 497
+    TabOrder = 0
+    object ButtonBroadTest: TButton
+      Left = 8
+      Height = 31
+      Top = 6
+      Width = 94
+      Caption = '广播测试'
+      OnClick = ButtonBroadTestClick
+      TabOrder = 0
+    end
+  end
+end
