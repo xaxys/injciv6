@@ -1,14 +1,16 @@
-# 文明6联机-基于IP的游戏发现
+# 文明6联机-基于IP的游戏发现 (IPv4/IPv6)
 
 > 改自：Hook文明6游戏sendto函数dll和注入程序
 
 原仓库：[https://gitcode.net/PeaZomboss/miscellaneous](https://gitcode.net/PeaZomboss/miscellaneous)
 
-> xaxys: 
-> 
-> 原作者使用 hook 方式使得 255.255.255.255 的三层广播包发到所有网卡，本人直接修改发包，使得游戏发现的 UDP 包直接单播到指服务器 IP，对于稳定的局域网，效果更好
-> 
-> IPv6 正在支持，实现原理同 Clash 的 FakeIP, 还没调试完，若成功，将不再需要局域网，直接公网上单播 UDP 包，实现公网联机
+> xaxys:
+>
+> 原作者使用 hook 方式使得 255.255.255.255 的三层广播包发到所有网卡，本程序直接修改发包，使得游戏发现的 UDP 包直接单播到指服务器 IP，对于稳定的局域网，效果更好
+>
+> ~~IPv6 正在支持，实现原理同 Clash 的 FakeIP, 还没调试完，若成功，将不再需要局域网，直接公网上单播 UDP 包，实现公网联机~~
+>
+> IPv6 也已经支持！实现原理同 Clash 的 FakeIP, 联机时不再需要局域网，直接公网上单播 UDP 包，实现公网联机（也许之后会写篇博客介绍一下实现）
 >
 > 使用方法：见 `bin\Readme.txt` 或 Release 中的 `Readme.txt`
 
@@ -39,7 +41,7 @@
 如果你单独安装了*GNU make*，那么可以直接运行`make`
 
 > xaxys:
-> 
+>
 > 下载上面的两个压缩包，一个解压到本文件夹下的 mingw32, 一个解压到本文件夹下的 mingw64
 >
 > 然后运行 env.bat, 会自动设置环境变量, 开箱即用
@@ -61,20 +63,22 @@
 如果游戏以管理员权限运行，injector也要以管理员权限运行
 
 > xaxys:
-> 
+>
 > 双击 injciv6.exe 自动注入正在运行的 文明6 进程（一个进程不要多次注入）
-> 
+>
 > 双击 civ6remove.exe 解除注入
-> 
+>
 > 第一次注入后，会在 文明6 目录下生成一个 injciv6-config.txt 文件，用于配置要连接的服务器地址。
-> 
+>
 > injciv6-config.txt 文件默认只有一行，初始为 255.255.255.255
-> 
+>
 > 请改成要连接的服务器地址，如 192.168.1.100, 或 2001::1234:5678:abcd:ef01, 或 abc.com 等
-> 
+>
 > 要使配置生效，请解除注入后重新注入。
-> 
+>
 > 然后就可以使用基于 IP 的游戏发现功能了。
-> 
-> 注：文明6 目录一般为 \Sid Meier's Civilization VI\Base\Binaries\Win64Steam
-
+>
+> - 当使用 ipv4 联机时，一般在客户端上进行注入，配置成服务器的 ipv4 地址即可。服务端无需注入
+> - 当使用 ipv6 联机时，在客户端注入并配置成服务器的 ipv6 地址的同时。服务端也需要注入，理论上地址可以任意 ipv6 地址，一般建议填 ::0 。
+>
+> 注：文明6 目录一般为 \Sid Meier's Civilization VI\Base\Binaries\Win64Steam 或 \Sid Meier's Civilization VI\Base\Binaries\Win64EOS

@@ -11,4 +11,7 @@ injciv6-config.txt 文件默认只有一行，初始为 255.255.255.255
 
 然后就可以使用基于 IP 的游戏发现功能了。
 
-注：文明6 目录一般为 \Sid Meier's Civilization VI\Base\Binaries\Win64Steam
+当使用 ipv4 联机时，一般在客户端上进行注入，配置成服务器的 ipv4 地址即可。服务端无需注入
+当使用 ipv6 联机时，在客户端注入并配置成服务器的 ipv6 地址的同时。服务端也需要注入，理论上地址可以任意 ipv6 地址，一般建议填 ::0 。
+
+注：文明6 目录一般为 \Sid Meier's Civilization VI\Base\Binaries\Win64Steam 或 \Sid Meier's Civilization VI\Base\Binaries\Win64EOS
