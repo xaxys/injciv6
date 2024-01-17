@@ -1,3 +1,4 @@
+*.o
 bin/*
 !bin/Readme.txt
 mingw32/*
