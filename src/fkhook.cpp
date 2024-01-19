@@ -688,6 +688,8 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
         }
 #endif
 
+        ULONG on = 1;
+        ioctlsocket(sock, FIONBIO, &on); // 设置为非阻塞, 非常重要，尤其是对于 steam 版的 steam 好友发现 47584 端口不可以去掉
         BOOL opt = TRUE;
         setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&opt, sizeof(BOOL)); // 允许发送广播
         setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(BOOL)); // 重用地址端口
