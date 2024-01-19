@@ -12,27 +12,51 @@
 #include <unordered_map>
 #include <ws2tcpip.h>
 
+typedef PCSTR WINAPI (*inet_ntop_func) (int, const void *, char *, socklen_t);
+typedef unsigned long WINAPI (*inet_addr_func) (const char *);
+typedef u_short WINAPI (*ntohs_func) (u_short);
+typedef int WINAPI (*getsockname_func) (SOCKET, sockaddr *, int *);
+typedef int WINAPI (*getaddrinfo_func) (const char *, const char *, const addrinfo *, addrinfo **);
+typedef void WINAPI (*freeaddrinfo_func) (addrinfo *);
+typedef int WINAPI (*wsagetlasterror_func) ();
+typedef SOCKET WINAPI (*socket_func) (int, int, int);
+typedef int WINAPI (*ioctlsocket_func) (SOCKET, long, u_long *);
+typedef int WINAPI (*setsockopt_func) (SOCKET, int, int, const char *, int);
+
+static inet_ntop_func _inet_ntop = NULL;
+static inet_addr_func _inet_addr = NULL;
+static ntohs_func _ntohs = NULL;
+static getsockname_func _getsockname = NULL;
+static getaddrinfo_func _getaddrinfo = NULL;
+static freeaddrinfo_func _freeaddrinfo = NULL;
+static wsagetlasterror_func _wsagetlasterror = NULL;
+static socket_func _socket = NULL;
+static ioctlsocket_func _ioctlsocket = NULL;
+static setsockopt_func _setsockopt = NULL;
+
+const struct in6_addr in6addr_any = {0};
+
 namespace std {
     std::string to_string(const struct in_addr& addr) {
         char str[INET_ADDRSTRLEN];
         memset(str, 0, sizeof(str));
-        inet_ntop(AF_INET, &addr, str, sizeof(str));
+        _inet_ntop(AF_INET, &addr, str, sizeof(str));
         return str;
     }
 
     std::string to_string(const struct in6_addr& addr) {
         char str[INET6_ADDRSTRLEN];
         memset(str, 0, sizeof(str));
-        inet_ntop(AF_INET6, &addr, str, sizeof(str));
+        _inet_ntop(AF_INET6, &addr, str, sizeof(str));
         return str;
     }
 
     std::string to_string(const struct sockaddr_in& addr) {
-        return to_string(addr.sin_addr) + ":" + to_string(ntohs(addr.sin_port));
+        return to_string(addr.sin_addr) + ":" + to_string(_ntohs(addr.sin_port));
     }
 
     std::string to_string(const struct sockaddr_in6& addr) {
-        return to_string(addr.sin6_addr) + ":" + to_string(ntohs(addr.sin6_port));
+        return to_string(addr.sin6_addr) + ":" + to_string(_ntohs(addr.sin6_port));
     }
 }
 
@@ -50,7 +74,7 @@ struct SockAddrIn {
         SockAddrIn addr_in;
         if (sock == INVALID_SOCKET) return addr_in;
         int namelen = sizeof(addr_in.addr);
-        getsockname(sock, (sockaddr *)&addr_in.addr, &namelen);
+        _getsockname(sock, (sockaddr *)&addr_in.addr, &namelen);
         return addr_in;
     }
 
@@ -72,14 +96,14 @@ struct SockAddrIn {
         memset(&hints, 0, sizeof(hints));
         hints.ai_family = AF_UNSPEC; // 不指定是IPv4还是IPv6
 
-        int err = getaddrinfo(addr, NULL, &hints, &res);
+        int err = _getaddrinfo(addr, NULL, &hints, &res);
         if (err != 0) {
             return false;
         }
 
         int len = get_len(res->ai_family);
         memcpy(&addr_in->addr, res->ai_addr, len);
-        freeaddrinfo(res);
+        _freeaddrinfo(res);
         return len > 0;
     }
 
@@ -122,9 +146,9 @@ struct SockAddrIn {
         int family = get_family();
         switch (family) {
         case AF_INET:
-            return ntohs(addr.addr_v4.sin_port);
+            return _ntohs(addr.addr_v4.sin_port);
         case AF_INET6:
-            return ntohs(addr.addr_v6.sin6_port);
+            return _ntohs(addr.addr_v6.sin6_port);
         default:
             return 0;
         }
@@ -133,7 +157,7 @@ struct SockAddrIn {
     void set_ip_any() {
         int family = get_family();
         if (family == AF_INET) {
-            addr.addr_v4.sin_addr.s_addr = htonl(INADDR_ANY);
+            addr.addr_v4.sin_addr.s_addr = INADDR_ANY;
         } else if (family == AF_INET6) {
             addr.addr_v6.sin6_addr = in6addr_any;
         }
@@ -210,8 +234,8 @@ struct FakeAddrPool {
 
     FakeAddrPool(ULONG start, ULONG len) {
         this->start = start;
-        this->end = start + len;
-        this->current = start;
+        this->end = this->start + len;
+        this->current = this->start;
     }
 
     sockaddr_in get_fake_addr(const sockaddr_in6 *addr) {
@@ -266,30 +290,91 @@ struct FakeAddrPool {
     }
 };
 
+int sendto_entry_len = 7;
+int select_entry_len = 7;
+int recvfrom_entry_len = 7;
+int closesocket_entry_len = 7;
+int bind_entry_len = 5;
+int wsasendto_entry_len = 7;
+int wsarecvfrom_entry_len = 7;
+
+static void init_entry_len() {
+    // get version
+    HMODULE hModule = GetModuleHandleA("ws2_32.dll");
+    if (!hModule) return;
+    char path[MAX_PATH];
+    GetModuleFileNameA(hModule, path, MAX_PATH);
+    DWORD dwHandle;
+    DWORD dwSize = GetFileVersionInfoSizeA(path, &dwHandle);
+    if (!dwSize) return;
+    void *pVersionInfo = malloc(dwSize);
+    if (!pVersionInfo) return;
+    if (!GetFileVersionInfoA(path, dwHandle, dwSize, pVersionInfo)) {
+        free(pVersionInfo);
+        return;
+    }
+    VS_FIXEDFILEINFO *pFileInfo;
+    UINT uLen;
+    if (!VerQueryValueA(pVersionInfo, "\\", (LPVOID *)&pFileInfo, &uLen)) {
+        free(pVersionInfo);
+        return;
+    }
+    DWORD dwFileVersionMS = pFileInfo->dwFileVersionMS;
+    DWORD dwFileVersionLS = pFileInfo->dwFileVersionLS;
+    free(pVersionInfo);
+
+    int major = HIWORD(dwFileVersionMS);
+    int minor = LOWORD(dwFileVersionMS);
+    int build = HIWORD(dwFileVersionLS);
+    int revision = LOWORD(dwFileVersionLS);
+
+    // > 6.2.22000.0 Win11
+    if (major > 6 || (major == 6 && minor > 2) || (major == 6 && minor == 2 && build > 22000) || (major == 6 && minor == 2 && build == 22000 && revision > 0)) {
 #ifdef _CPU_X86
-#define SENDTO_ENTRY_LEN 5
-#define SELECT_ENTRY_LEN 7
-#define RECVFROM_ENTRY_LEN 5
-#define CLOSESOCKET_ENTRY_LEN 5
-#define BIND_ENTRY_LEN 5 // untested
-#define WSASENDTO_ENTRY_LEN 5 // untested
-#define WSARECVFROM_ENTRY_LEN 5 // untested
+        sendto_entry_len = 5;
+        select_entry_len = 7;
+        recvfrom_entry_len = 5;
+        closesocket_entry_len = 5;
+        bind_entry_len = 5;
+        wsasendto_entry_len = 5;
+        wsarecvfrom_entry_len = 5;
 #endif
 #ifdef _CPU_X64
-#define SENDTO_ENTRY_LEN 7
-#define SELECT_ENTRY_LEN 7
-#define RECVFROM_ENTRY_LEN 7
-#define CLOSESOCKET_ENTRY_LEN 7
-#define BIND_ENTRY_LEN 5
-#define WSASENDTO_ENTRY_LEN 7
-#define WSARECVFROM_ENTRY_LEN 7
+        sendto_entry_len = 7;
+        select_entry_len = 7;
+        recvfrom_entry_len = 7;
+        closesocket_entry_len = 5;
+        bind_entry_len = 5;
+        wsasendto_entry_len = 7;
+        wsarecvfrom_entry_len = 7;
 #endif
+    } else { // <= 6.2.22000.0 Win10
+#ifdef _CPU_X86
+        sendto_entry_len = 5;
+        select_entry_len = 7;
+        recvfrom_entry_len = 5;
+        closesocket_entry_len = 5;
+        bind_entry_len = 5;
+        wsasendto_entry_len = 5;
+        wsarecvfrom_entry_len = 5;
+#endif
+#ifdef _CPU_X64
+        sendto_entry_len = 7;
+        select_entry_len = 7;
+        recvfrom_entry_len = 7;
+        closesocket_entry_len = 7;
+        bind_entry_len = 5;
+        wsasendto_entry_len = 7;
+        wsarecvfrom_entry_len = 7;
+#endif
+    }
+}
 
 // #define DEBUG_ENABLE
 #define LOG_ENABLE
 
 static const ULONG FAKE_IP_RANGE = 100;
-static const ULONG FAKE_IP_START = inet_addr("127.0.127.1");
+static const ULONG FAKE_IP_START = 0x017F007F; // 127.0.127.1
 
 typedef int WINAPI(*sendto_func) (SOCKET, const char *, int, int, const sockaddr *, int);
 typedef int WINAPI(*select_func) (int, fd_set *, fd_set *, fd_set *, const TIMEVAL *);
@@ -442,7 +527,7 @@ static int WINAPI fake_wsasendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCou
 
 #ifdef LOG_ENABLE
         if (result == SOCKET_ERROR) {
-            int errorcode = WSAGetLastError();
+            int errorcode = _wsagetlasterror();
             write_log("fake-ip  wsasendto failed: %s -> %s, through: %s, %d -> %d, result: %d, errorcode: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(SockAddrIn::from_socket(socks[s])).c_str(), s, socks[s], result, errorcode);
         }
 #endif
@@ -459,7 +544,7 @@ static int WINAPI fake_wsasendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCou
 
 #ifdef DEBUG_ENABLE
     if (result == SOCKET_ERROR) {
-        int errorcode = WSAGetLastError();
+        int errorcode = _wsagetlasterror();
         write_debug("original wsasendto failed: %d\n", errorcode);
     }
     write_debug("original wsasendto: %s, %d, result: %d\n", std::to_string(*origin_to).c_str(), s, result);
@@ -477,7 +562,7 @@ static int WINAPI fake_wsarecvfrom(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferC
 
 #ifdef LOG_ENABLE
         if (result == SOCKET_ERROR) {
-            int errorcode = WSAGetLastError();
+            int errorcode = _wsagetlasterror();
             if (errorcode != WSAEWOULDBLOCK) write_log("redirect wsarecvfrom failed: %s -> %s, %d -> %d, result: %d, errorcode: %d\n", std::to_string(SockAddrIn::from_socket(s)).c_str(), std::to_string(SockAddrIn::from_socket(socks[s])).c_str(), s, socks[s], result, errorcode);
         }
 #endif
@@ -519,7 +604,7 @@ static int WINAPI fake_wsarecvfrom(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferC
 
 #ifdef DEBUG_ENABLE
     if (result == SOCKET_ERROR) {
-        int errorcode = WSAGetLastError();
+        int errorcode = _wsagetlasterror();
         write_debug("original wsarecvfrom failed: %d\n", errorcode);
     }
     if (result != SOCKET_ERROR) write_debug("original wsarecvfrom: %s, %d, result: %d\n", std::to_string(*((sockaddr_in *)lpFrom)).c_str(), s, result);
@@ -542,27 +627,27 @@ static int WINAPI fake_bind(SOCKET s, const sockaddr *addr, int addrlen)
             new_addr_v6.sin6_addr = in6addr_any;
             new_addr_v6.sin6_port = origin_addr_v4.addr.addr_v4.sin_port;
 
-            SOCKET sock = socket(AF_INET6, SOCK_DGRAM, 0);
+            SOCKET sock = _socket(AF_INET6, SOCK_DGRAM, 0);
 
 #ifdef LOG_ENABLE
             if (sock == INVALID_SOCKET) {
-                int errorcode = WSAGetLastError();
+                int errorcode = _wsagetlasterror();
                 write_log("create socket failed while bind: %s -> %s, %d -> %d, errorcode: %d\n", std::to_string(origin_addr_v4).c_str(), std::to_string(new_addr_v6).c_str(), s, sock, errorcode);
                 return SOCKET_ERROR;
             }
 #endif
 
             ULONG on = 1;
-            ioctlsocket(sock, FIONBIO, &on); // 设置为非阻塞, 非常重要，尤其是对于 62056 端口不可以去掉
+            _ioctlsocket(sock, FIONBIO, &on); // 设置为非阻塞, 非常重要，尤其是对于 62056 端口不可以去掉
             BOOL opt = TRUE;
-            setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&opt, sizeof(BOOL)); // 允许发送广播
-            setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(BOOL)); // 重用地址端口
+            _setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&opt, sizeof(BOOL)); // 允许发送广播
+            _setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(BOOL)); // 重用地址端口
 
             int result = _bind(sock, (sockaddr *)&new_addr_v6, sizeof(new_addr_v6));
 
 #ifdef LOG_ENABLE
             if (result == SOCKET_ERROR) {
-                int errorcode = WSAGetLastError();
+                int errorcode = _wsagetlasterror();
                 write_log("bind socket failed while bind: %s -> %s, %d -> %d, result: %s, errorcode: %d\n", std::to_string(origin_addr_v4).c_str(), std::to_string(new_addr_v6).c_str(), s, sock, result, errorcode);
                 return SOCKET_ERROR;
             }
@@ -579,18 +664,11 @@ static int WINAPI fake_closesocket(SOCKET s)
 {
     if (socks.count(s)) {
         write_debug("close socket: %d -> %d\n", s, socks[s]);
-        closesocket(socks[s]);
+        _closesocket(socks[s]);
         socks.erase(s);
         write_socks();
     }
     return _closesocket(s);
-}
-
-static bool create_fake_socket(SOCKET s, int new_family, const struct sockaddr_in& origin_local_addr)
-{
-
-
-    return true;
 }
 
 static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, const sockaddr *to, int tolen)
@@ -603,7 +681,7 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
         int result = _sendto(socks[s], buf, len, flags, (sockaddr *)&new_to, sizeof(sockaddr_in6));
 #ifdef LOG_ENABLE
         if (result == SOCKET_ERROR) {
-            int errorcode = WSAGetLastError();
+            int errorcode = _wsagetlasterror();
             write_debug("fake-ip  sendto failed: %s -> %s, through: %s, %d -> %d, result: %d, errorcode: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(SockAddrIn::from_socket(socks[s])).c_str(), s, socks[s], result, errorcode);
         }
 #endif
@@ -623,7 +701,7 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
     //         sockaddr_in origin_local_addr;
     //         origin_local_addr.sin_family = AF_INET;
     //         int namelen = sizeof(sockaddr_in);
-    //         getsockname(s, (sockaddr *)&origin_local_addr, &namelen); // 获取原sockaddr
+    //         _getsockname(s, (sockaddr *)&origin_local_addr, &namelen); // 获取原sockaddr
 
     //         bool success = create_fake_socket(s, AF_INET6, origin_local_addr);
     //         if (!success) {
@@ -640,7 +718,7 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
     //         new_to.sin6_port = origin_to->sin_port;
     //         int result = _sendto(socks[s], buf, len, flags, (sockaddr *)&new_to, sizeof(sockaddr_in6));
     //         if (result == SOCKET_ERROR) {
-    //             int errorcode = WSAGetLastError();
+    //             int errorcode = _wsagetlasterror();
     //             write_debug("broadcast sendto failed: %d\n", errorcode);
     //         }
     //     }
@@ -667,11 +745,11 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
         sockaddr_in origin_local_addr;
         origin_local_addr.sin_family = AF_INET;
         int namelen = sizeof(sockaddr_in);
-        getsockname(s, (sockaddr *)&origin_local_addr, &namelen); // 获取原sockaddr
+        _getsockname(s, (sockaddr *)&origin_local_addr, &namelen); // 获取原sockaddr
         if (origin_local_addr.sin_port == 0) {
             // 如果没有端口号，先原样发送，这样系统才会分配一个端口号
             result = _sendto(s, buf, len, flags, to, tolen);
-            getsockname(s, (sockaddr *)&origin_local_addr, &namelen); // 重新获取
+            _getsockname(s, (sockaddr *)&origin_local_addr, &namelen); // 重新获取
         }
 
         SockAddrIn new_local_addr;
@@ -679,20 +757,20 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
         new_local_addr.set_ip_any();
         new_local_addr.set_port_raw(origin_local_addr.sin_port);
 
-        SOCKET sock = socket(new_local_addr.get_family(), SOCK_DGRAM, 0);
+        SOCKET sock = _socket(new_local_addr.get_family(), SOCK_DGRAM, 0);
 #ifdef LOG_ENABLE
         if (sock == INVALID_SOCKET) {
-            int errorcode = WSAGetLastError();
+            int errorcode = _wsagetlasterror();
             write_log("create socket failed while sendto: %s -> %s, %d -> %d, result: %d, errorcode: %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock, result, errorcode);
             return SOCKET_ERROR;
         }
 #endif
 
         ULONG on = 1;
-        ioctlsocket(sock, FIONBIO, &on); // 设置为非阻塞, 非常重要，尤其是对于 steam 版的 steam 好友发现 47584 端口不可以去掉
+        _ioctlsocket(sock, FIONBIO, &on); // 设置为非阻塞, 非常重要，尤其是对于 steam 版的 steam 好友发现 47584 端口不可以去掉
         BOOL opt = TRUE;
-        setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&opt, sizeof(BOOL)); // 允许发送广播
-        setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(BOOL)); // 重用地址端口
+        _setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&opt, sizeof(BOOL)); // 允许发送广播
+        _setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(BOOL)); // 重用地址端口
 
         _bind(sock, new_local_addr.get_sockaddr(), new_local_addr.get_len()); // 绑定地址端口
 
@@ -779,10 +857,24 @@ static int WINAPI fake_recvfrom(SOCKET s, char *buf, int len, int flags, sockadd
     return result;
 }
 
+void init_tool_func() {
+    HMODULE hModule = GetModuleHandleA("ws2_32.dll");
+    _inet_ntop = (inet_ntop_func)GetProcAddress(hModule, "inet_ntop");
+    _inet_addr = (inet_addr_func)GetProcAddress(hModule, "inet_addr");
+    _ntohs = (ntohs_func)GetProcAddress(hModule, "ntohs");
+    _getsockname = (getsockname_func)GetProcAddress(hModule, "getsockname");
+    _getaddrinfo = (getaddrinfo_func)GetProcAddress(hModule, "getaddrinfo");
+    _freeaddrinfo = (freeaddrinfo_func)GetProcAddress(hModule, "freeaddrinfo");
+    _wsagetlasterror = (wsagetlasterror_func)GetProcAddress(hModule, "WSAGetLastError");
+    _socket = (socket_func)GetProcAddress(hModule, "socket");
+    _ioctlsocket = (ioctlsocket_func)GetProcAddress(hModule, "ioctlsocket");
+    _setsockopt = (setsockopt_func)GetProcAddress(hModule, "setsockopt");
+}
+
 void hook_wsasendto()
 {
     if (!wsasendto_hook) {
-        wsasendto_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "WSASendTo", (void *)fake_wsasendto, WSASENDTO_ENTRY_LEN);
+        wsasendto_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "WSASendTo", (void *)fake_wsasendto, wsasendto_entry_len);
         _wsasendto = (wsasendto_func)wsasendto_hook->get_old_entry();
         wsasendto_hook->hook();
     }
@@ -800,7 +892,7 @@ void unhook_wsasendto()
 void hook_wsarecvfrom()
 {
     if (!wsarecvfrom_hook) {
-        wsarecvfrom_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "WSARecvFrom", (void *)fake_wsarecvfrom, WSARECVFROM_ENTRY_LEN);
+        wsarecvfrom_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "WSARecvFrom", (void *)fake_wsarecvfrom, wsarecvfrom_entry_len);
         _wsarecvfrom = (wsarecvfrom_func)wsarecvfrom_hook->get_old_entry();
         wsarecvfrom_hook->hook();
     }
@@ -818,7 +910,7 @@ void unhook_wsarecvfrom()
 void hook_bind()
 {
     if (!bind_hook) {
-        bind_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "bind", (void *)fake_bind, BIND_ENTRY_LEN);
+        bind_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "bind", (void *)fake_bind, bind_entry_len);
         _bind = (bind_func)bind_hook->get_old_entry();
         bind_hook->hook();
     }
@@ -836,7 +928,7 @@ void unhook_bind()
 void hook_closesocket()
 {
     if (!closesocket_hook) {
-        closesocket_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "closesocket", (void *)fake_closesocket, CLOSESOCKET_ENTRY_LEN);
+        closesocket_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "closesocket", (void *)fake_closesocket, closesocket_entry_len);
         _closesocket = (closesocket_func)closesocket_hook->get_old_entry();
         closesocket_hook->hook();
     }
@@ -854,7 +946,7 @@ void unhook_closesocket()
 void hook_sendto()
 {
     if (!sendto_hook) {
-        sendto_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "sendto", (void *)fake_sendto, SENDTO_ENTRY_LEN);
+        sendto_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "sendto", (void *)fake_sendto, sendto_entry_len);
         _sendto = (sendto_func)sendto_hook->get_old_entry();
         sendto_hook->hook();
     }
@@ -872,7 +964,7 @@ void unhook_sendto()
 void hook_select()
 {
     if (!select_hook) {
-        select_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "select", (void *)fake_select, SELECT_ENTRY_LEN);
+        select_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "select", (void *)fake_select, select_entry_len);
         _select = (select_func)select_hook->get_old_entry();
         select_hook->hook();
     }
@@ -890,7 +982,7 @@ void unhook_select()
 void hook_recvfrom()
 {
     if (!recvfrom_hook) {
-        recvfrom_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "recvfrom", (void *)fake_recvfrom, RECVFROM_ENTRY_LEN);
+        recvfrom_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "recvfrom", (void *)fake_recvfrom, recvfrom_entry_len);
         _recvfrom = (recvfrom_func)recvfrom_hook->get_old_entry();
         recvfrom_hook->hook();
     }
@@ -907,6 +999,8 @@ void unhook_recvfrom()
 
 void hook()
 {
+    init_tool_func();
+    init_entry_len();
     read_config();
     hook_bind();
     hook_sendto();
@@ -927,6 +1021,6 @@ void unhook()
     unhook_wsasendto();
     unhook_wsarecvfrom();
     for (auto it = socks.begin(); it != socks.end(); it++) {
-        closesocket(it->second);
+        _closesocket(it->second);
     }
 }

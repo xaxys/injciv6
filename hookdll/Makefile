@@ -1,7 +1,7 @@
 vpath %.cpp ../src
 cxx = g++
 cxxflags = -c -O2 -I ../inc
-linkflags = -shared -static -l ws2_32
+linkflags = -shared -static -l version
 cxx32prefix = i686-w64-mingw32-
 cxx64prefix = x86_64-w64-mingw32-
 objdir = ./obj/

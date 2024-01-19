@@ -2,10 +2,6 @@
 #include "inlinehook.h"
 #include "fkhook.h"
 
-#ifdef _MSC_VER
-#pragma comment (lib, "ws2_32.lib")
-#endif
-
 BOOL APIENTRY DllMain(HINSTANCE hinstdll, DWORD reason, LPVOID reserved)
 {
     if (reason == DLL_PROCESS_ATTACH) {
