@@ -1017,10 +1017,10 @@ void unhook()
     unhook_sendto();
     unhook_select();
     unhook_recvfrom();
-    unhook_closesocket();
     unhook_wsasendto();
     unhook_wsarecvfrom();
     for (auto it = socks.begin(); it != socks.end(); it++) {
         _closesocket(it->second);
     }
+    unhook_closesocket();
 }
