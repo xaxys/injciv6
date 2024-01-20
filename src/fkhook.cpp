@@ -7,9 +7,11 @@
 #include <cstring>
 #include <ctime>
 // #include <iphlpapi.h>
+#include <algorithm>
 #include <map>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include <ws2tcpip.h>
 
 typedef PCSTR WINAPI (*inet_ntop_func) (int, const void *, char *, socklen_t);
@@ -290,6 +292,158 @@ struct FakeAddrPool {
     }
 };
 
+struct EntryLenMatcher {
+private:
+    struct Version2EntryLen {
+        // 因为Windows的Major和Minor版本号有时候是10.0，有时候是6.2，所以不用这两个版本号
+        // int major;
+        // int minor;
+        int build;
+        int revision;
+        int entry_len;
+
+        bool operator==(const Version2EntryLen& other) const {
+            return build == other.build && revision == other.revision;
+        }
+
+        bool operator<(const Version2EntryLen& other) const {
+            if (build != other.build) return build < other.build;
+            if (revision != other.revision) return revision < other.revision;
+            return false;
+        }
+    };
+
+    std::vector<Version2EntryLen> entry_len_list;
+
+public:
+    EntryLenMatcher() : entry_len_list() {}
+
+    EntryLenMatcher(std::initializer_list<Version2EntryLen> list) : entry_len_list() {
+        for (auto it = list.begin(); it != list.end(); it++) {
+            entry_len_list.push_back(*it);
+        }
+        std::sort(entry_len_list.begin(), entry_len_list.end());
+    }
+
+    int get_entry_len(int build, int revision) {
+        Version2EntryLen version = {build, revision, 0};
+        auto it = std::upper_bound(entry_len_list.begin(), entry_len_list.end(), version); 
+        if (it == entry_len_list.begin()) return -1;
+        it--;
+        return it->entry_len;
+    }
+};
+
+// file_version,bind,closesocket,sendto,select,recvfrom,wsasendto,wsarecvfrom
+// 10.0.17763.1      ,5,7,7,5,7,7,5
+// 10.0.17763.771    ,5,7,7,5,7,7,5
+// 10.0.18362.1      ,5,7,7,5,7,7,5
+// 10.0.18362.387    ,5,7,7,5,7,7,5
+// 10.0.19041.1      ,5,7,7,7,7,7,7
+// 10.0.19041.546    ,5,7,7,7,7,7,7
+// 10.0.19041.3570   ,5,7,7,7,7,7,7
+// 10.0.19041.3636   ,5,7,7,7,7,7,7
+// 10.0.20348.1      ,5,5,7,7,7,7,7
+// 10.0.22000.1      ,5,5,7,7,7,7,7
+// 10.0.22621.1      ,5,5,7,7,7,7,5
+EntryLenMatcher wsarecvfrom_entry_len_matcher = {
+    {17763, 1, 5},
+    {17763, 771, 5},
+    {18362, 1, 5},
+    {18362, 387, 5},
+    {19041, 1, 7},
+    {19041, 546, 7},
+    {19041, 3570, 7},
+    {19041, 3636, 7},
+    {20348, 1, 7},
+    {22000, 1, 7},
+    {22621, 1, 5},
+};
+
+EntryLenMatcher wsasendto_entry_len_matcher = {
+    {17763, 1, 7},
+    {17763, 771, 7},
+    {18362, 1, 7},
+    {18362, 387, 7},
+    {19041, 1, 7},
+    {19041, 546, 7},
+    {19041, 3570, 7},
+    {19041, 3636, 7},
+    {20348, 1, 7},
+    {22000, 1, 7},
+    {22621, 1, 7},
+};
+
+EntryLenMatcher recvfrom_entry_len_matcher = {
+    {17763, 1, 7},
+    {17763, 771, 7},
+    {18362, 1, 7},
+    {18362, 387, 7},
+    {19041, 1, 7},
+    {19041, 546, 7},
+    {19041, 3570, 7},
+    {19041, 3636, 7},
+    {20348, 1, 7},
+    {22000, 1, 7},
+    {22621, 1, 7},
+};
+
+EntryLenMatcher select_entry_len_matcher = {
+    {17763, 1, 5},
+    {17763, 771, 5},
+    {18362, 1, 5},
+    {18362, 387, 5},
+    {19041, 1, 7},
+    {19041, 546, 7},
+    {19041, 3570, 7},
+    {19041, 3636, 7},
+    {20348, 1, 7},
+    {22000, 1, 7},
+    {22621, 1, 7},
+};
+
+EntryLenMatcher sendto_entry_len_matcher = {
+    {17763, 1, 7},
+    {17763, 771, 7},
+    {18362, 1, 7},
+    {18362, 387, 7},
+    {19041, 1, 7},
+    {19041, 546, 7},
+    {19041, 3570, 7},
+    {19041, 3636, 7},
+    {20348, 1, 7},
+    {22000, 1, 7},
+    {22621, 1, 7},
+};
+
+EntryLenMatcher closesocket_entry_len_matcher = {
+    {17763, 1, 7},
+    {17763, 771, 7},
+    {18362, 1, 7},
+    {18362, 387, 7},
+    {19041, 1, 7},
+    {19041, 546, 7},
+    {19041, 3570, 7},
+    {19041, 3636, 7},
+    {20348, 1, 5},
+    {22000, 1, 5},
+    {22621, 1, 5},
+};
+
+EntryLenMatcher bind_entry_len_matcher = {
+    {17763, 1, 5},
+    {17763, 771, 5},
+    {18362, 1, 5},
+    {18362, 387, 5},
+    {19041, 1, 5},
+    {19041, 546, 5},
+    {19041, 3570, 5},
+    {19041, 3636, 5},
+    {20348, 1, 5},
+    {22000, 1, 5},
+    {22621, 1, 5},
+};
+
 int sendto_entry_len = 7;
 int select_entry_len = 7;
 int recvfrom_entry_len = 7;
@@ -319,55 +473,33 @@ static void init_entry_len() {
         free(pVersionInfo);
         return;
     }
-    DWORD dwFileVersionMS = pFileInfo->dwFileVersionMS;
-    DWORD dwFileVersionLS = pFileInfo->dwFileVersionLS;
+    DWORD dwProductVersionMS = pFileInfo->dwProductVersionMS;
+    DWORD dwProductVersionLS = pFileInfo->dwProductVersionLS;
     free(pVersionInfo);
 
-    int major = HIWORD(dwFileVersionMS);
-    int minor = LOWORD(dwFileVersionMS);
-    int build = HIWORD(dwFileVersionLS);
-    int revision = LOWORD(dwFileVersionLS);
+    int major = HIWORD(dwProductVersionMS);
+    int minor = LOWORD(dwProductVersionMS);
+    int build = HIWORD(dwProductVersionLS);
+    int revision = LOWORD(dwProductVersionLS);
 
-    // > 6.2.22000.0 Win11
-    if (major > 6 || (major == 6 && minor > 2) || (major == 6 && minor == 2 && build > 22000) || (major == 6 && minor == 2 && build == 22000 && revision > 0)) {
 #ifdef _CPU_X86
-        sendto_entry_len = 5;
-        select_entry_len = 7;
-        recvfrom_entry_len = 5;
-        closesocket_entry_len = 5;
-        bind_entry_len = 5;
-        wsasendto_entry_len = 5;
-        wsarecvfrom_entry_len = 5;
+    sendto_entry_len = 5;
+    select_entry_len = 7;
+    recvfrom_entry_len = 5;
+    closesocket_entry_len = 5;
+    bind_entry_len = 5;
+    wsasendto_entry_len = 5;
+    wsarecvfrom_entry_len = 5;
 #endif
 #ifdef _CPU_X64
-        sendto_entry_len = 7;
-        select_entry_len = 7;
-        recvfrom_entry_len = 7;
-        closesocket_entry_len = 5;
-        bind_entry_len = 5;
-        wsasendto_entry_len = 7;
-        wsarecvfrom_entry_len = 7;
+    sendto_entry_len = sendto_entry_len_matcher.get_entry_len(build, revision);
+    select_entry_len = select_entry_len_matcher.get_entry_len(build, revision);
+    recvfrom_entry_len = recvfrom_entry_len_matcher.get_entry_len(build, revision);
+    closesocket_entry_len = closesocket_entry_len_matcher.get_entry_len(build, revision);
+    bind_entry_len = bind_entry_len_matcher.get_entry_len(build, revision);
+    wsasendto_entry_len = wsasendto_entry_len_matcher.get_entry_len(build, revision);
+    wsarecvfrom_entry_len = wsarecvfrom_entry_len_matcher.get_entry_len(build, revision);
 #endif
-    } else { // <= 6.2.22000.0 Win10
-#ifdef _CPU_X86
-        sendto_entry_len = 5;
-        select_entry_len = 7;
-        recvfrom_entry_len = 5;
-        closesocket_entry_len = 5;
-        bind_entry_len = 5;
-        wsasendto_entry_len = 5;
-        wsarecvfrom_entry_len = 5;
-#endif
-#ifdef _CPU_X64
-        sendto_entry_len = 7;
-        select_entry_len = 7;
-        recvfrom_entry_len = 7;
-        closesocket_entry_len = 7;
-        bind_entry_len = 5;
-        wsasendto_entry_len = 7;
-        wsarecvfrom_entry_len = 7;
-#endif
-    }
 }
 
 // #define DEBUG_ENABLE
