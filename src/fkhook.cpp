@@ -1,11 +1,13 @@
 #include <winsock2.h>
 
+#include "Minhook.h"
 #include "fkhook.h"
 #include "platform.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <mutex>
 // #include <iphlpapi.h>
 #include <algorithm>
 #include <map>
@@ -292,216 +294,6 @@ struct FakeAddrPool {
     }
 };
 
-struct EntryLenMatcher {
-private:
-    struct Version2EntryLen {
-        // 因为Windows的Major和Minor版本号有时候是10.0，有时候是6.2，所以不用这两个版本号
-        // int major;
-        // int minor;
-        int build;
-        int revision;
-        int entry_len;
-
-        bool operator==(const Version2EntryLen& other) const {
-            return build == other.build && revision == other.revision;
-        }
-
-        bool operator<(const Version2EntryLen& other) const {
-            if (build != other.build) return build < other.build;
-            if (revision != other.revision) return revision < other.revision;
-            return false;
-        }
-    };
-
-    std::vector<Version2EntryLen> entry_len_list;
-
-public:
-    EntryLenMatcher() : entry_len_list() {}
-
-    EntryLenMatcher(std::initializer_list<Version2EntryLen> list) : entry_len_list() {
-        for (auto it = list.begin(); it != list.end(); it++) {
-            entry_len_list.push_back(*it);
-        }
-        std::sort(entry_len_list.begin(), entry_len_list.end());
-    }
-
-    int get_entry_len(int build, int revision) {
-        Version2EntryLen version = {build, revision, 0};
-        auto it = std::upper_bound(entry_len_list.begin(), entry_len_list.end(), version); 
-        if (it == entry_len_list.begin()) return -1;
-        it--;
-        return it->entry_len;
-    }
-};
-
-// file_version,bind,closesocket,sendto,select,recvfrom,wsasendto,wsarecvfrom
-// 10.0.17763.1      ,5,7,7,5,7,7,5
-// 10.0.17763.771    ,5,7,7,5,7,7,5
-// 10.0.18362.1      ,5,7,7,5,7,7,5
-// 10.0.18362.387    ,5,7,7,5,7,7,5
-// 10.0.19041.1      ,5,7,7,7,7,7,7
-// 10.0.19041.546    ,5,7,7,7,7,7,7
-// 10.0.19041.3570   ,5,7,7,7,7,7,7
-// 10.0.19041.3636   ,5,7,7,7,7,7,7
-// 10.0.20348.1      ,5,5,7,7,7,7,7
-// 10.0.22000.1      ,5,5,7,7,7,7,7
-// 10.0.22621.1      ,5,5,7,7,7,7,5
-EntryLenMatcher wsarecvfrom_entry_len_matcher = {
-    {17763, 1, 5},
-    {17763, 771, 5},
-    {18362, 1, 5},
-    {18362, 387, 5},
-    {19041, 1, 7},
-    {19041, 546, 7},
-    {19041, 3570, 7},
-    {19041, 3636, 7},
-    {20348, 1, 7},
-    {22000, 1, 7},
-    {22621, 1, 5},
-};
-
-EntryLenMatcher wsasendto_entry_len_matcher = {
-    {17763, 1, 7},
-    {17763, 771, 7},
-    {18362, 1, 7},
-    {18362, 387, 7},
-    {19041, 1, 7},
-    {19041, 546, 7},
-    {19041, 3570, 7},
-    {19041, 3636, 7},
-    {20348, 1, 7},
-    {22000, 1, 7},
-    {22621, 1, 7},
-};
-
-EntryLenMatcher recvfrom_entry_len_matcher = {
-    {17763, 1, 7},
-    {17763, 771, 7},
-    {18362, 1, 7},
-    {18362, 387, 7},
-    {19041, 1, 7},
-    {19041, 546, 7},
-    {19041, 3570, 7},
-    {19041, 3636, 7},
-    {20348, 1, 7},
-    {22000, 1, 7},
-    {22621, 1, 7},
-};
-
-EntryLenMatcher select_entry_len_matcher = {
-    {17763, 1, 5},
-    {17763, 771, 5},
-    {18362, 1, 5},
-    {18362, 387, 5},
-    {19041, 1, 7},
-    {19041, 546, 7},
-    {19041, 3570, 7},
-    {19041, 3636, 7},
-    {20348, 1, 7},
-    {22000, 1, 7},
-    {22621, 1, 7},
-};
-
-EntryLenMatcher sendto_entry_len_matcher = {
-    {17763, 1, 7},
-    {17763, 771, 7},
-    {18362, 1, 7},
-    {18362, 387, 7},
-    {19041, 1, 7},
-    {19041, 546, 7},
-    {19041, 3570, 7},
-    {19041, 3636, 7},
-    {20348, 1, 7},
-    {22000, 1, 7},
-    {22621, 1, 7},
-};
-
-EntryLenMatcher closesocket_entry_len_matcher = {
-    {17763, 1, 7},
-    {17763, 771, 7},
-    {18362, 1, 7},
-    {18362, 387, 7},
-    {19041, 1, 7},
-    {19041, 546, 7},
-    {19041, 3570, 7},
-    {19041, 3636, 7},
-    {20348, 1, 5},
-    {22000, 1, 5},
-    {22621, 1, 5},
-};
-
-EntryLenMatcher bind_entry_len_matcher = {
-    {17763, 1, 5},
-    {17763, 771, 5},
-    {18362, 1, 5},
-    {18362, 387, 5},
-    {19041, 1, 5},
-    {19041, 546, 5},
-    {19041, 3570, 5},
-    {19041, 3636, 5},
-    {20348, 1, 5},
-    {22000, 1, 5},
-    {22621, 1, 5},
-};
-
-int sendto_entry_len = 7;
-int select_entry_len = 7;
-int recvfrom_entry_len = 7;
-int closesocket_entry_len = 7;
-int bind_entry_len = 5;
-int wsasendto_entry_len = 7;
-int wsarecvfrom_entry_len = 7;
-
-static void init_entry_len() {
-    // get version
-    HMODULE hModule = GetModuleHandleA("ws2_32.dll");
-    if (!hModule) return;
-    char path[MAX_PATH];
-    GetModuleFileNameA(hModule, path, MAX_PATH);
-    DWORD dwHandle;
-    DWORD dwSize = GetFileVersionInfoSizeA(path, &dwHandle);
-    if (!dwSize) return;
-    void *pVersionInfo = malloc(dwSize);
-    if (!pVersionInfo) return;
-    if (!GetFileVersionInfoA(path, dwHandle, dwSize, pVersionInfo)) {
-        free(pVersionInfo);
-        return;
-    }
-    VS_FIXEDFILEINFO *pFileInfo;
-    UINT uLen;
-    if (!VerQueryValueA(pVersionInfo, "\\", (LPVOID *)&pFileInfo, &uLen)) {
-        free(pVersionInfo);
-        return;
-    }
-    DWORD dwProductVersionMS = pFileInfo->dwProductVersionMS;
-    DWORD dwProductVersionLS = pFileInfo->dwProductVersionLS;
-    free(pVersionInfo);
-
-    int major = HIWORD(dwProductVersionMS);
-    int minor = LOWORD(dwProductVersionMS);
-    int build = HIWORD(dwProductVersionLS);
-    int revision = LOWORD(dwProductVersionLS);
-
-#ifdef _CPU_X86
-    sendto_entry_len = 5;
-    select_entry_len = 7;
-    recvfrom_entry_len = 5;
-    closesocket_entry_len = 5;
-    bind_entry_len = 5;
-    wsasendto_entry_len = 5;
-    wsarecvfrom_entry_len = 5;
-#endif
-#ifdef _CPU_X64
-    sendto_entry_len = sendto_entry_len_matcher.get_entry_len(build, revision);
-    select_entry_len = select_entry_len_matcher.get_entry_len(build, revision);
-    recvfrom_entry_len = recvfrom_entry_len_matcher.get_entry_len(build, revision);
-    closesocket_entry_len = closesocket_entry_len_matcher.get_entry_len(build, revision);
-    bind_entry_len = bind_entry_len_matcher.get_entry_len(build, revision);
-    wsasendto_entry_len = wsasendto_entry_len_matcher.get_entry_len(build, revision);
-    wsarecvfrom_entry_len = wsarecvfrom_entry_len_matcher.get_entry_len(build, revision);
-#endif
-}
-
 // #define DEBUG_ENABLE
 #define LOG_ENABLE
 
@@ -516,14 +308,6 @@ typedef int WINAPI(*bind_func) (SOCKET, const sockaddr *, int);
 typedef int WINAPI(*wsasendto_func) (SOCKET, LPWSABUF, DWORD, LPDWORD, DWORD, const sockaddr *, int, LPWSAOVERLAPPED, LPWSAOVERLAPPED_COMPLETION_ROUTINE);
 typedef int WINAPI(*wsarecvfrom_func) (SOCKET, LPWSABUF, DWORD, LPDWORD, LPDWORD, sockaddr *, LPINT, LPWSAOVERLAPPED, LPWSAOVERLAPPED_COMPLETION_ROUTINE);
 
-static InlineHook *sendto_hook = NULL;
-static InlineHook *select_hook = NULL;
-static InlineHook *recvfrom_hook = NULL;
-static InlineHook *closesocket_hook = NULL;
-static InlineHook *bind_hook = NULL;
-static InlineHook *wsasendto_hook = NULL;
-static InlineHook *wsarecvfrom_hook = NULL;
-static InlineHook *wsapoll_hook = NULL;
 static sendto_func _sendto = NULL;
 static select_func _select = NULL;
 static recvfrom_func _recvfrom = NULL;
@@ -572,7 +356,8 @@ static void write_socks_impl()
 #define write_socks()
 #endif
 
-static void write_log(const char *fmt, ...)
+#ifdef LOG_ENABLE
+static void write_log_impl(const char *fmt, ...)
 {
     FILE *fp = fopen("injciv6-log.txt", "a+");
     if (fp) {
@@ -591,6 +376,10 @@ static void write_log(const char *fmt, ...)
         fclose(fp);
     }
 }
+#define write_log(fmt, ...) write_log_impl(fmt, __VA_ARGS__)
+#else
+#define write_log(fmt, ...)
+#endif
 
 static void read_config()
 {
@@ -814,7 +603,7 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
 #ifdef LOG_ENABLE
         if (result == SOCKET_ERROR) {
             int errorcode = _wsagetlasterror();
-            write_debug("fake-ip  sendto failed: %s -> %s, through: %s, %d -> %d, result: %d, errorcode: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(SockAddrIn::from_socket(socks[s])).c_str(), s, socks[s], result, errorcode);
+            write_log("fake-ip  sendto failed: %s -> %s, through: %s, %d -> %d, result: %d, errorcode: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(SockAddrIn::from_socket(socks[s])).c_str(), s, socks[s], result, errorcode);
         }
 #endif
 
@@ -1003,156 +792,77 @@ void init_tool_func() {
     _setsockopt = (setsockopt_func)GetProcAddress(hModule, "setsockopt");
 }
 
-void hook_wsasendto()
-{
-    if (!wsasendto_hook) {
-        wsasendto_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "WSASendTo", (void *)fake_wsasendto, wsasendto_entry_len);
-        _wsasendto = (wsasendto_func)wsasendto_hook->get_old_entry();
-        wsasendto_hook->hook();
+template <typename T>
+void hook_func(const char *func_name, T* new_func, T *&p_old_func) {
+    HMODULE hModule = GetModuleHandleA("ws2_32.dll");
+    auto handler = GetProcAddress(hModule, func_name);
+    MH_STATUS status = MH_CreateHook(reinterpret_cast<LPVOID*>(handler), reinterpret_cast<LPVOID*>(new_func), reinterpret_cast<LPVOID*>(&p_old_func));
+    if (status != MH_OK) {
+        write_log("hook %s failed: %d\n", func_name, status);
+    }
+    status = MH_EnableHook(reinterpret_cast<LPVOID*>(handler));
+    if (status != MH_OK) {
+        write_log("enable %s hook failed: %d\n", func_name, status);
     }
 }
 
-void unhook_wsasendto()
-{
-    if (wsasendto_hook) {
-        wsasendto_hook->unhook();
-        delete wsasendto_hook;
-        wsasendto_hook = NULL;
+void unhook_func(const char *func_name) {
+    HMODULE hModule = GetModuleHandleA("ws2_32.dll");
+    auto handler = GetProcAddress(hModule, func_name);
+    MH_STATUS status = MH_DisableHook(reinterpret_cast<LPVOID*>(handler));
+    if (status != MH_OK) {
+        write_log("disable %s hook failed: %d\n", func_name, status);
+    }
+    status = MH_RemoveHook(reinterpret_cast<LPVOID*>(handler));
+    if (status != MH_OK) {
+        write_log("remove hook %s failed: %d\n", func_name, status);
     }
 }
 
-void hook_wsarecvfrom()
+void init_hooklib()
 {
-    if (!wsarecvfrom_hook) {
-        wsarecvfrom_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "WSARecvFrom", (void *)fake_wsarecvfrom, wsarecvfrom_entry_len);
-        _wsarecvfrom = (wsarecvfrom_func)wsarecvfrom_hook->get_old_entry();
-        wsarecvfrom_hook->hook();
-    }
+    static std::once_flag once_flag;
+    std::call_once(once_flag, []() {
+        MH_STATUS status = MH_Initialize();
+        if (status != MH_OK) {
+            write_log("init hooklib failed: %d\n", status);
+        }
+    });
 }
 
-void unhook_wsarecvfrom()
+void uninit_hooklib()
 {
-    if (wsarecvfrom_hook) {
-        wsarecvfrom_hook->unhook();
-        delete wsarecvfrom_hook;
-        wsarecvfrom_hook = NULL;
-    }
-}
-
-void hook_bind()
-{
-    if (!bind_hook) {
-        bind_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "bind", (void *)fake_bind, bind_entry_len);
-        _bind = (bind_func)bind_hook->get_old_entry();
-        bind_hook->hook();
-    }
-}
-
-void unhook_bind()
-{
-    if (bind_hook) {
-        bind_hook->unhook();
-        delete bind_hook;
-        bind_hook = NULL;
-    }
-}
-
-void hook_closesocket()
-{
-    if (!closesocket_hook) {
-        closesocket_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "closesocket", (void *)fake_closesocket, closesocket_entry_len);
-        _closesocket = (closesocket_func)closesocket_hook->get_old_entry();
-        closesocket_hook->hook();
-    }
-}
-
-void unhook_closesocket()
-{
-    if (closesocket_hook) {
-        closesocket_hook->unhook();
-        delete closesocket_hook;
-        closesocket_hook = NULL;
-    }
-}
-
-void hook_sendto()
-{
-    if (!sendto_hook) {
-        sendto_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "sendto", (void *)fake_sendto, sendto_entry_len);
-        _sendto = (sendto_func)sendto_hook->get_old_entry();
-        sendto_hook->hook();
-    }
-}
-
-void unhook_sendto()
-{
-    if (sendto_hook) {
-        sendto_hook->unhook();
-        delete sendto_hook;
-        sendto_hook = NULL;
-    }
-}
-
-void hook_select()
-{
-    if (!select_hook) {
-        select_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "select", (void *)fake_select, select_entry_len);
-        _select = (select_func)select_hook->get_old_entry();
-        select_hook->hook();
-    }
-}
-
-void unhook_select()
-{
-    if (select_hook) {
-        select_hook->unhook();
-        delete select_hook;
-        select_hook = NULL;
-    }
-}
-
-void hook_recvfrom()
-{
-    if (!recvfrom_hook) {
-        recvfrom_hook = new InlineHook(GetModuleHandleA("ws2_32.dll"), "recvfrom", (void *)fake_recvfrom, recvfrom_entry_len);
-        _recvfrom = (recvfrom_func)recvfrom_hook->get_old_entry();
-        recvfrom_hook->hook();
-    }
-}
-
-void unhook_recvfrom()
-{
-    if (recvfrom_hook) {
-        recvfrom_hook->unhook();
-        delete recvfrom_hook;
-        recvfrom_hook = NULL;
+    MH_STATUS status = MH_Uninitialize();
+    if (status != MH_OK) {
+        write_log("uninit hooklib failed: %d\n", status);
     }
 }
 
 void hook()
 {
+    init_hooklib();
     init_tool_func();
-    init_entry_len();
     read_config();
-    hook_bind();
-    hook_sendto();
-    hook_select();
-    hook_recvfrom();
-    hook_closesocket();
-    hook_wsasendto();
-    hook_wsarecvfrom();
+    hook_func("bind", fake_bind, _bind);
+    hook_func("sendto", fake_sendto, _sendto);
+    hook_func("select", fake_select, _select);
+    hook_func("recvfrom", fake_recvfrom, _recvfrom);
+    hook_func("closesocket", fake_closesocket, _closesocket);
+    hook_func("WSASendTo", fake_wsasendto, _wsasendto);
+    hook_func("WSARecvFrom", fake_wsarecvfrom, _wsarecvfrom);
 }
 
 void unhook()
 {
-    unhook_bind();
-    unhook_sendto();
-    unhook_select();
-    unhook_recvfrom();
-    unhook_wsasendto();
-    unhook_wsarecvfrom();
     for (auto it = socks.begin(); it != socks.end(); it++) {
         _closesocket(it->second);
     }
-    unhook_closesocket();
+    unhook_func("bind");
+    unhook_func("sendto");
+    unhook_func("select");
+    unhook_func("recvfrom");
+    unhook_func("closesocket");
+    unhook_func("WSASendTo");
+    unhook_func("WSARecvFrom");
+    uninit_hooklib();
 }
