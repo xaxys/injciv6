@@ -17,6 +17,8 @@
   - 重定向对 `0.0.0.0` 的监听到 `[::0]`
   - 建立 FakeIP 表，将 IPv6 地址映射到 `127.0.127.1 ~ 127.0.127.100` 并提供给 文明6 虚假的 IPv4 地址 (实现原理同 Clash 的 FakeIP)
 
+想了解程序原理的可以看下面的[原理简述](#原理简述)
+
 ## 使用方法
 
 **注入工具由于涉及创建远程线程操作，Windows Defender 大概率会报毒，把 Windows Defender 关了再运行吧**
@@ -92,8 +94,8 @@ IPv6状态以下几种：
 - src存放源代码
 - hookdll存放dll的代码和Makefile
 - injector存放注入程序的代码和Makefile
-- utils存放实用程序代码
-- test存放测试用代码
+- injciv6存放注入程序的代码和Makefile
+- injciv6-gui存放图形界面程序的代码和Makefile
 
 ## 编译方法
 
@@ -102,22 +104,20 @@ IPv6状态以下几种：
 注意要下载两个，一个带**i686**前缀，一个带**x86_64**前缀  
 将它们分别解压到不同目录，然后将二者的bin目录都设置环境变量
 
-当然如果你用msys2也可以，会配置完全没问题
-
-切换工作目录到当前目录，运行`mingw32-make`即可  
-如果你单独安装了*GNU make*，那么可以直接运行`make`
-
 > xaxys:
 >
 > 下载上面的两个压缩包，一个解压到本文件夹下的 mingw32, 一个解压到本文件夹下的 mingw64
 >
 > 然后运行 env.bat, 会自动设置环境变量, 开箱即用
 
+当然如果你用msys2也可以，会配置完全没问题
+
+切换工作目录到当前目录，运行`mingw32-make`即可  
+如果你单独安装了*GNU make*，那么可以直接运行`make`
+
 ---
 
-要编译utils下的辅助程序，请到[Lazarus官网](https://www.lazarus-ide.org/)下载并安装最新版的*Lazarus IDE*
-
-然后用Lazarus打开auxtool.lpi工程文件，在菜单栏中依次选择**运行-构建**即可，exe会生成在bin目录下
+要编译 injciv6-gui，需要安装 Go 语言环境，然后按原样使用 `make` 即可
 
 ## 原理简述
 
