@@ -124,6 +124,10 @@ func ReadConfig() (string, error) {
 	}
 	path := filepath.Join(dir, "injciv6-config.txt")
 
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return "", nil // File not exist
+	}
+
 	// Read the file
 	data, err := os.ReadFile(path)
 	if err != nil {
