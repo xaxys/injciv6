@@ -66,7 +66,7 @@ func NewAboutPage(parent walk.Container) (Page, error) {
 					Label{
 						Font:          Font{PointSize: 10},
 						TextAlignment: AlignNear,
-						Text:          "Go 版本: " + GoVersion,
+						Text:          "Go版本: " + GoVersion,
 					},
 					Label{
 						Font:          Font{PointSize: 10},
