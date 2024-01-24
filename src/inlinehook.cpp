@@ -2,6 +2,8 @@
 #include "inlinehook.h"
 #include "platform.h"
 
+// [[deprecated]] 自版本 v0.3.0 起，不再使用 InlineHook，改用 MinHook 库
+
 #ifdef _CPU_X64
 #define HOOK_PATCH_MAX 18
 #endif

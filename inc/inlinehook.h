@@ -4,7 +4,8 @@
 
 #define HOOK_JUMP_LEN 5
 
-class InlineHook
+// [[deprecated]] 自版本 v0.3.0 起，不再使用 InlineHook，改用 MinHook 库
+class [[deprecated]] InlineHook
 {
 private:
     void *old_entry; // 存放原来的代码和跳转回去的代码

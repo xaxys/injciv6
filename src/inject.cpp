@@ -1,5 +1,10 @@
 #include <windows.h>
 #include <tlhelp32.h>
+#include "inject.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 bool inject_dll(DWORD pid, const char *dll_path)
 {
@@ -87,3 +92,7 @@ finally:
         CloseHandle(hproc);
     return result;
 }
+
+#ifdef __cplusplus
+}
+#endif

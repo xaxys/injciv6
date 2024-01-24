@@ -1,8 +1,13 @@
 *.o
+*.syso
+*.dll
+*.exe
 bin/*
 !bin/Readme.txt
 mingw32/*
 mingw64/*
 !mingw32/.keep
 !mingw64/.keep
-.vscode
+temp/*
+.vscode/*
+**/.assets/*

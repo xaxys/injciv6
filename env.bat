@@ -2,7 +2,7 @@
 setlocal
 set MINGW32=%~dp0mingw32
 set MINGW64=%~dp0mingw64
-set PATH=%PATH%;%MINGW32%\bin;%MINGW64%\bin
+set PATH=%MINGW64%\bin;%MINGW32%\bin;%PATH%
 echo Environment variables set. Entering bash...
 cmd
 endlocal

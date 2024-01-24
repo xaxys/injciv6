@@ -3,7 +3,7 @@
 #include <shellapi.h>
 #include "inject.h"
 
-inline bool runas_admin(const char *exename)
+inline bool runas_admin(const char *exename, const char* args = NULL)
 {
     SHELLEXECUTEINFOA sei;
     memset(&sei, 0, sizeof(sei));
@@ -12,6 +12,7 @@ inline bool runas_admin(const char *exename)
     sei.lpVerb = "runas";
     sei.lpFile = exename;
     sei.nShow = SW_SHOWNORMAL;
+    sei.lpParameters = args;
     return ShellExecuteExA(&sei);
 }
 

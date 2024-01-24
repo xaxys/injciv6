@@ -1,4 +1,4 @@
-subdir = hookdll injector injciv6
+subdir = hookdll injector injciv6 injciv6-gui
 cleandir = $(addprefix _clean_, $(subdir))
 
 all: $(subdir)
