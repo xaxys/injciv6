@@ -4,11 +4,10 @@ package utils
 #cgo CFLAGS: -I ${SRCDIR}/../../inc -I ${SRCDIR}/../../src
 #cgo CPPFLAGS: -I ${SRCDIR}/../../inc -I ${SRCDIR}/../../src
 #cgo CXXFLAGS: -I ${SRCDIR}/../../inc -I ${SRCDIR}/../../src
-#cgo LDFLAGS: -static
+#cgo LDFLAGS: -static -l ws2_32 -l iphlpapi
 #include <stdio.h>
-#include "inject_util.h"
-#include "inject.cpp"
 #include "inject_util.cpp"
+#include "inject.cpp"
 
 bool is_null(HINSTANCE handle) {
 	return handle == NULL;
@@ -47,15 +46,27 @@ func IsCiv6Running() Civ6Status {
 	return Civ6StatusNotFound
 }
 
-func IsCiv6Injected() bool {
+type InjectStatus int
+
+const (
+	InjectStatusUnknown     InjectStatus = 0
+	InjectStatusNotInjected InjectStatus = 1
+	InjectStatusInjected    InjectStatus = 2
+	InjectStatusRunningIPv6 InjectStatus = 3
+)
+
+func IsCiv6Injected() InjectStatus {
 	dllCstr := C.CString("hookdll64.dll")
 	defer C.free(unsafe.Pointer(dllCstr))
 	pid := C.get_civ6_proc()
 	handle := C.find_module_handle_from_pid(pid, dllCstr)
-	if !C.is_null(handle) {
-		return true
+	if C.is_null(handle) {
+		return InjectStatusNotInjected
 	}
-	return false
+	if C.is_injciv6_running(pid) {
+		return InjectStatusRunningIPv6
+	}
+	return InjectStatusInjected
 }
 
 func GetCiv6Path() (string, error) {

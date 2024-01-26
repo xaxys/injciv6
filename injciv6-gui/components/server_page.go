@@ -280,13 +280,20 @@ func (p *ServerPage) OnGameStatusChanged(status utils.Civ6Status) {
 	go p.updateClientStartStopButton()
 }
 
-func (p *ServerPage) OnInjectStatusChanged(injected bool) {
-	if injected {
+func (p *ServerPage) OnInjectStatusChanged(injectStatus utils.InjectStatus) {
+	switch injectStatus {
+	case utils.InjectStatusRunningIPv6:
+		p.injectStatusLabel.SetText("运行中 (IPv6)")
+		p.injectStatusLabel.SetTextColor(ColorGreen)
+	case utils.InjectStatusInjected:
 		p.injectStatusLabel.SetText("已注入")
 		p.injectStatusLabel.SetTextColor(ColorGreen)
-	} else {
+	case utils.InjectStatusNotInjected:
 		p.injectStatusLabel.SetText("未注入")
 		p.injectStatusLabel.SetTextColor(ColorRed)
+	default:
+		p.injectStatusLabel.SetText("未知")
+		p.injectStatusLabel.SetTextColor(ColorGray)
 	}
 	go p.updateClientStartStopButton()
 }
@@ -298,23 +305,30 @@ func (p *ServerPage) updateClientStartStopButton() {
 	}()
 
 	// 检查游戏是否运行
-	status := service.Game.Status()
-	if status != utils.Civ6StatusRunningDX11 && status != utils.Civ6StatusRunningDX12 {
+	gameStatus := service.Game.Status()
+	if gameStatus != utils.Civ6StatusRunningDX11 && gameStatus != utils.Civ6StatusRunningDX12 {
 		return
 	}
 
 	// 检查注入状态
-	injected := service.Inject.IsInjected()
-	if injected {
+	injectStatus := service.Inject.IsInjected()
+	switch injectStatus {
+	case utils.InjectStatusRunningIPv6:
+		p.serverStartStopButton.SetText("请先返回至主菜单")
+		return
+	case utils.InjectStatusInjected:
 		p.serverStartStopButton.SetText("移除注入")
-	} else {
+	case utils.InjectStatusNotInjected:
 		p.serverStartStopButton.SetText("以服务器模式注入")
+	default:
+		p.serverStartStopButton.SetText("未知")
 	}
 	enabled = true
 }
 
 func (p *ServerPage) OnServerStartStopButtonClicked() {
-	if service.Inject.IsInjected() {
+	injectStatus := service.Inject.IsInjected()
+	if injectStatus == utils.InjectStatusInjected || injectStatus == utils.InjectStatusRunningIPv6 {
 		p.StopServer()
 	} else {
 		p.StartServer()
