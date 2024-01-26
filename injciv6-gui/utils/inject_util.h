@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <windows.h>
 
-bool runas_admin(const char *exename);
+bool runas_admin(LPCWSTR exename);
 DWORD get_civ6_dx11_proc();
 DWORD get_civ6_dx12_proc();
 DWORD get_civ6_proc();

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"injciv6-gui/service"
 	"injciv6-gui/utils"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -50,6 +51,7 @@ func NewToolsPage(parent walk.Container) (Page, error) {
 				TextAlignment: AlignFar,
 				AssignTo:      &p.infoLabel,
 				Text:          "　",
+				Background:    SolidColorBrush{Color: ColorBackground},
 			},
 		},
 	}).Create(NewBuilder(parent)); err != nil {
@@ -64,23 +66,17 @@ func NewToolsPage(parent walk.Container) (Page, error) {
 }
 
 func (p *ToolsPage) LogInfo(msg string) {
-	p.infoLabel.SetSuspended(true)
-	defer p.infoLabel.SetSuspended(false)
-
 	p.infoLabel.SetText(msg)
 	p.infoLabel.SetTextColor(ColorBlack)
 }
 
 func (p *ToolsPage) LogError(err error) {
-	p.infoLabel.SetSuspended(true)
-	defer p.infoLabel.SetSuspended(false)
-
 	p.infoLabel.SetText(err.Error())
 	p.infoLabel.SetTextColor(ColorRed)
 	fmt.Println(err)
 }
 
-func (p *ToolsPage) OpenConfigFile() {
+func (p *ToolsPage) OpenFile(name, filename string) {
 	status := service.Game.Status()
 
 	if status != utils.Civ6StatusRunningDX11 && status != utils.Civ6StatusRunningDX12 {
@@ -90,37 +86,32 @@ func (p *ToolsPage) OpenConfigFile() {
 	dir, err := utils.GetCiv6Dir()
 	if err != nil {
 		errStr := strings.TrimSpace(err.Error())
-		p.LogError(fmt.Errorf("获取配置文件路径失败: %v（请尝试以管理员身份运行）", errStr))
+		p.LogError(fmt.Errorf("获取%s文件路径失败: %s", name, errStr))
+		go RerunAsAdmin(fmt.Sprintf("获取%s文件路径失败: %s", name, errStr))
 		return
 	}
-	path := filepath.Join(dir, "injciv6-config.txt")
+	path := filepath.Join(dir, filename)
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			p.LogError(fmt.Errorf("打开%s文件失败: 文件不存在", name))
+			return
+		}
+		p.LogError(fmt.Errorf("打开%s文件失败: %s", name, err.Error()))
+		return
+	}
+
 	cmd := exec.Command("cmd", "/C", path)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	if err := cmd.Start(); err != nil {
-		errStr := strings.TrimSpace(err.Error())
-		p.LogError(fmt.Errorf("打开配置文件失败: %v", errStr))
+		p.LogError(fmt.Errorf("打开%s文件失败: %s", name, err.Error()))
 	}
-	p.LogInfo("打开配置文件成功")
+	p.LogInfo(fmt.Sprintf("打开%s文件成功", name))
+}
+
+func (p *ToolsPage) OpenConfigFile() {
+	p.OpenFile("配置文件", "injciv6-config.txt")
 }
 
 func (p *ToolsPage) OpenLogFile() {
-	status := service.Game.Status()
-	if status != utils.Civ6StatusRunningDX11 && status != utils.Civ6StatusRunningDX12 {
-		p.LogError(fmt.Errorf("请先运行游戏"))
-		return
-	}
-	dir, err := utils.GetCiv6Dir()
-	if err != nil {
-		errStr := strings.TrimSpace(err.Error())
-		p.LogError(fmt.Errorf("获取日志文件路径失败: %v（请尝试以管理员身份运行）", errStr))
-		return
-	}
-	path := filepath.Join(dir, "injciv6-log.txt")
-	cmd := exec.Command("cmd", "/C", path)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	if err := cmd.Start(); err != nil {
-		errStr := strings.TrimSpace(err.Error())
-		p.LogError(fmt.Errorf("打开日志文件失败: %v", errStr))
-	}
-	p.LogInfo("打开日志文件成功")
+	p.OpenFile("日志文件", "injciv6-log.txt")
 }

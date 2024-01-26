@@ -60,6 +60,8 @@ const (
 	IPv6StatusOnlineFailMultiple
 	IPv6StatusDNSFail
 	IPv6StatusDNSFailMultiple
+	IPv6StatusDNSNotPreferred
+	IPv6StatusDNSNotPreferredMultiple
 	IPv6StatusSupported
 	IPv6StatusSupportedMultiple
 )
@@ -80,6 +82,15 @@ func GetMyIPv6() (string, IPv6Status, error) {
 			status = IPv6StatusSupportedMultiple
 		}
 		return ip, status, nil // 在线获取到IPv6地址，说明支持IPv6，并且DNS也正常，返回支持IPv6和IPv6上网主地址
+	}
+
+	ip, onlineErr = GetMyIPv6OnlineDNSv6() // 在线获取IPv6地址，使用仅AAAA记录的DNS，如果成功，说明支持IPv6，但IPv6地址不是首选地址
+	if onlineErr == nil {
+		status := IPv6StatusDNSNotPreferred
+		if len(ips) > 1 {
+			status = IPv6StatusDNSNotPreferredMultiple
+		}
+		return ip, status, nil // 在线获取到IPv6地址，说明支持IPv6，但IPv6地址不是首选地址，返回支持IPv6和IPv6上网主地址
 	}
 
 	ip, onlineErr = GetMyIPv6OnlineNoDNS() // 在线获取IPv6地址，不使用DNS，如果成功，说明支持IPv6，但DNS不正常
@@ -176,10 +187,29 @@ func GetMyIPv6Online() (string, error) {
 	}
 
 	ip := net.ParseIP(string(body))
-	if ip.To4() != nil {
-		return "", fmt.Errorf("Not an IPv6 address")
+	if ip != nil && ip.To4() == nil && ip.IsGlobalUnicast() {
+		return ip.String(), nil
 	}
-	return ip.String(), nil
+	return "", fmt.Errorf("Not an IPv6 address")
+}
+
+func GetMyIPv6OnlineDNSv6() (string, error) {
+	url := "http://6.ipw.cn/"
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	ip := net.ParseIP(string(body))
+	if ip != nil && ip.To4() == nil && ip.IsGlobalUnicast() {
+		return ip.String(), nil
+	}
+	return "", fmt.Errorf("Not an IPv6 address")
 }
 
 func GetMyIPv6OnlineNoDNS() (string, error) {

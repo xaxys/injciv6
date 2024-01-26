@@ -2,9 +2,6 @@ package components
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"strings"
 
 	"injciv6-gui/service"
 	"injciv6-gui/utils"
@@ -15,14 +12,10 @@ import (
 
 type ServerPage struct {
 	*walk.Composite
-	serverAddrEdit          *walk.LineEdit
-	ipv6StatusLabel         *walk.Label
-	ipv6ExplainLabel        *walk.Label
-	gameStatusLabel         *walk.Label
-	injectStatusLabel       *walk.Label
-	closeAfterStartCheckBox *walk.CheckBox
-	serverStartStopButton   *walk.PushButton
-	infoLabel               *walk.Label
+	*BaseInjectPage
+	serverAddrEdit     *walk.LineEdit
+	baseInjectPageComp *walk.Composite
+	infoLabel          *walk.Label
 }
 
 func NewServerPage(parent walk.Container) (Page, error) {
@@ -43,98 +36,8 @@ func NewServerPage(parent walk.Container) (Page, error) {
 			},
 			VSeparator{},
 			Composite{
-				Layout: HBox{MarginsZero: true},
-				Children: []Widget{
-					Composite{
-						Layout: VBox{MarginsZero: true},
-						Children: []Widget{
-							Composite{
-								Layout: HBox{MarginsZero: true},
-								Children: []Widget{
-									Label{
-										Text:          "IPv6状态: ",
-										TextAlignment: AlignNear,
-									},
-									Label{
-										Font:          Font{Bold: true},
-										AssignTo:      &p.ipv6StatusLabel,
-										Text:          "未知",
-										TextColor:     ColorGray,
-										Background:    SolidColorBrush{Color: ColorBackground},
-										TextAlignment: AlignNear,
-									},
-									Label{
-										Font:          Font{Underline: true},
-										AssignTo:      &p.ipv6ExplainLabel,
-										Text:          "解释",
-										TextColor:     ColorGray,
-										Background:    SolidColorBrush{Color: ColorBackground},
-										TextAlignment: AlignNear,
-										Visible:       false,
-									},
-								},
-								Alignment: AlignHNearVCenter,
-							},
-							Composite{
-								Layout: HBox{MarginsZero: true},
-								Children: []Widget{
-									Label{
-										Text:          "游戏状态: ",
-										TextAlignment: AlignNear,
-									},
-									Label{
-										Font:          Font{Bold: true},
-										AssignTo:      &p.gameStatusLabel,
-										Text:          "未知",
-										TextColor:     ColorGray,
-										Background:    SolidColorBrush{Color: ColorBackground},
-										TextAlignment: AlignNear,
-									},
-								},
-								Alignment: AlignHNearVCenter,
-							},
-							Composite{
-								Layout: HBox{MarginsZero: true},
-								Children: []Widget{
-									Label{
-										Text:          "注入状态: ",
-										TextAlignment: AlignNear,
-									},
-									Label{
-										Font:          Font{Bold: true},
-										AssignTo:      &p.injectStatusLabel,
-										Text:          "未注入",
-										TextColor:     ColorRed,
-										Background:    SolidColorBrush{Color: ColorBackground},
-										TextAlignment: AlignNear,
-									},
-								},
-								Alignment: AlignHNearVCenter,
-							},
-							CheckBox{
-								Text:             "注入后关闭此程序",
-								Checked:          service.GetWithDef("CloseAfterStart", true),
-								OnCheckedChanged: p.OnCloseAfterStartChanged,
-								AssignTo:         &p.closeAfterStartCheckBox,
-								Alignment:        AlignHNearVCenter,
-							},
-						},
-					},
-					HSpacer{},
-					Composite{
-						Layout: VBox{},
-						Children: []Widget{
-							PushButton{
-								Persistent: true,
-								MinSize:    Size{Width: 230, Height: 80},
-								Enabled:    false,
-								Text:       "以服务器模式注入",
-								AssignTo:   &p.serverStartStopButton,
-								OnClicked:  p.OnServerStartStopButtonClicked,
-							},
-						},
-					},
-				},
+				AssignTo: &p.baseInjectPageComp,
+				Layout:   HBox{MarginsZero: true, SpacingZero: true},
 			},
 			VSpacer{},
 			VSeparator{},
@@ -154,10 +57,22 @@ func NewServerPage(parent walk.Container) (Page, error) {
 		return nil, err
 	}
 
-	service.IPv6.Listener().Register(service.NewFuncListener(p.OnIPv6StatusChanged))
-	service.IPv6.ErrorListener().Register(service.NewFuncListener(p.OnIPv6Error))
-	service.Game.Listener().Register(service.NewFuncListener(p.OnGameStatusChanged))
-	service.Inject.Listener().Register(service.NewFuncListener(p.OnInjectStatusChanged))
+	cfg := &BaseInjectPageCfg{
+		PageName:                "服务器",
+		GetConfigContent:        p.GetConfigContent,
+		GetStartStopButtonReady: p.GetStartStopButtonReady,
+		OnIPv6Status:            p.OnIPv6StatusChanged,
+		OnIPv6Error:             p.OnIPv6Error,
+		OnGameStatus:            p.OnGameStatusChanged,
+		OnInjectStatus:          p.OnInjectStatusChanged,
+		OnInfo:                  p.LogInfo,
+		OnError:                 p.LogError,
+	}
+
+	var err error
+	if p.BaseInjectPage, err = NewBaseInjectPage(p.baseInjectPageComp, cfg); err != nil {
+		return nil, err
+	}
 
 	return p, nil
 }
@@ -173,10 +88,6 @@ func (p *ServerPage) LogError(err error) {
 	fmt.Println(err)
 }
 
-func (p *ServerPage) OnCloseAfterStartChanged() {
-	service.Set("CloseAfterStart", p.closeAfterStartCheckBox.Checked())
-}
-
 func (p *ServerPage) OnServerAddrChanged() {
 	if p.serverAddrEdit.Text() != service.IPv6.IPv6() {
 		p.serverAddrEdit.SetText(service.IPv6.IPv6())
@@ -184,191 +95,40 @@ func (p *ServerPage) OnServerAddrChanged() {
 }
 
 func (p *ServerPage) OnIPv6StatusChanged(status service.IPv6WithStatus) {
-	p.ipv6StatusLabel.SetSuspended(true)
-	p.ipv6ExplainLabel.SetSuspended(true)
 	switch status.Status {
-	case utils.IPv6StatusNotSupported:
-		p.ipv6StatusLabel.SetText("不支持")
-		p.ipv6StatusLabel.SetTextColor(ColorRed)
-		p.ipv6ExplainLabel.SetVisible(false)
-
 	case utils.IPv6StatusOnlineFail:
-		p.ipv6StatusLabel.SetText("可能不支持（无法上网）")
-		p.ipv6StatusLabel.SetTextColor(ColorOrange)
-		p.ipv6StatusLabel.SetToolTipText(status.IPv6)
 		p.serverAddrEdit.SetText(status.IPv6)
-		p.ipv6ExplainLabel.SetVisible(true)
-		p.ipv6ExplainLabel.SetToolTipText("在本地找到的IPv6地址，但无法连接IPv6网站，除非您未连接到互联网，否则您大概率不支持IPv6")
 
 	case utils.IPv6StatusOnlineFailMultiple:
-		p.ipv6StatusLabel.SetText("可能不支持（无法上网）")
-		p.ipv6StatusLabel.SetTextColor(ColorOrange)
-		p.ipv6StatusLabel.SetToolTipText("多个IPv6地址，请手动选择一个地址")
-		p.serverAddrEdit.SetText(status.IPv6)
-		p.ipv6ExplainLabel.SetVisible(true)
-		p.ipv6ExplainLabel.SetToolTipText("在本地找到的IPv6地址，但无法连接IPv6网站，除非您未连接到互联网，否则您大概率不支持IPv6")
+		p.serverAddrEdit.SetText("多个IPv6地址，请手动选择一个地址")
 
-	case utils.IPv6StatusDNSFail:
-		p.ipv6StatusLabel.SetText("部分支持（DNS解析失败）")
-		p.ipv6StatusLabel.SetTextColor(ColorYellow)
-		p.ipv6StatusLabel.SetToolTipText(status.IPv6)
+	case utils.IPv6StatusDNSFail,
+		utils.IPv6StatusDNSFailMultiple,
+		utils.IPv6StatusDNSNotPreferred,
+		utils.IPv6StatusDNSNotPreferredMultiple,
+		utils.IPv6StatusSupported,
+		utils.IPv6StatusSupportedMultiple:
 		p.serverAddrEdit.SetText(status.IPv6)
-		p.ipv6ExplainLabel.SetVisible(true)
-		p.ipv6ExplainLabel.SetToolTipText("您可以通过IPv6上网，但您的DNS服务器不支持IPv6，域名功能将无法使用")
-
-	case utils.IPv6StatusDNSFailMultiple:
-		p.ipv6StatusLabel.SetText("部分支持（DNS解析失败）")
-		p.ipv6StatusLabel.SetTextColor(ColorYellow)
-		p.ipv6StatusLabel.SetToolTipText(status.IPv6)
-		p.serverAddrEdit.SetText(status.IPv6)
-		p.ipv6ExplainLabel.SetVisible(true)
-		p.ipv6ExplainLabel.SetToolTipText("您可以通过IPv6上网，但您的DNS服务器不支持IPv6，域名功能将无法使用")
-
-	case utils.IPv6StatusSupported, utils.IPv6StatusSupportedMultiple:
-		p.ipv6StatusLabel.SetText("支持")
-		p.ipv6StatusLabel.SetTextColor(ColorGreen)
-		p.ipv6StatusLabel.SetToolTipText(status.IPv6)
-		p.serverAddrEdit.SetText(status.IPv6)
-		p.ipv6ExplainLabel.SetVisible(false)
 
 	default:
-		p.ipv6StatusLabel.SetText("未知")
-		p.ipv6StatusLabel.SetTextColor(ColorGray)
-		p.ipv6ExplainLabel.SetVisible(false)
+		p.serverAddrEdit.SetText("")
 
 	}
-	p.ipv6StatusLabel.SetSuspended(false)
-	p.ipv6ExplainLabel.SetSuspended(false)
-	go p.updateClientStartStopButton()
 }
 
 func (p *ServerPage) OnIPv6Error(err error) {
-	p.ipv6StatusLabel.SetToolTipText(err.Error())
-	p.LogError(err)
 }
 
 func (p *ServerPage) OnGameStatusChanged(status utils.Civ6Status) {
-	p.gameStatusLabel.SetSuspended(true)
-	switch status {
-	case utils.Civ6StatusRunningDX11:
-		p.gameStatusLabel.SetText("运行中 (DX11)")
-		p.gameStatusLabel.SetTextColor(ColorGreen)
-
-		path, err := utils.GetCiv6Path()
-		if err != nil {
-			errStr := strings.TrimSpace(err.Error())
-			p.gameStatusLabel.SetToolTipText(fmt.Sprintf("获取游戏路径失败: %s（请尝试以管理员身份运行）", errStr))
-		}
-		p.gameStatusLabel.SetToolTipText(path)
-
-	case utils.Civ6StatusRunningDX12:
-		p.gameStatusLabel.SetText("运行中 (DX12)")
-		p.gameStatusLabel.SetTextColor(ColorGreen)
-
-		path, err := utils.GetCiv6Path()
-		if err != nil {
-			errStr := strings.TrimSpace(err.Error())
-			p.gameStatusLabel.SetToolTipText(fmt.Sprintf("获取游戏路径失败: %s（请尝试以管理员身份运行）", errStr))
-		}
-		p.gameStatusLabel.SetToolTipText(path)
-
-	default:
-		p.gameStatusLabel.SetText("未运行")
-		p.gameStatusLabel.SetTextColor(ColorRed)
-	}
-	p.gameStatusLabel.SetSuspended(false)
-	go p.updateClientStartStopButton()
 }
 
 func (p *ServerPage) OnInjectStatusChanged(injectStatus utils.InjectStatus) {
-	switch injectStatus {
-	case utils.InjectStatusRunningIPv6:
-		p.injectStatusLabel.SetText("运行中 (IPv6)")
-		p.injectStatusLabel.SetTextColor(ColorGreen)
-	case utils.InjectStatusInjected:
-		p.injectStatusLabel.SetText("已注入")
-		p.injectStatusLabel.SetTextColor(ColorGreen)
-	case utils.InjectStatusNotInjected:
-		p.injectStatusLabel.SetText("未注入")
-		p.injectStatusLabel.SetTextColor(ColorRed)
-	default:
-		p.injectStatusLabel.SetText("未知")
-		p.injectStatusLabel.SetTextColor(ColorGray)
-	}
-	go p.updateClientStartStopButton()
 }
 
-func (p *ServerPage) updateClientStartStopButton() {
-	enabled := false
-	defer func() {
-		p.serverStartStopButton.SetEnabled(enabled)
-	}()
-
-	// 检查游戏是否运行
-	gameStatus := service.Game.Status()
-	if gameStatus != utils.Civ6StatusRunningDX11 && gameStatus != utils.Civ6StatusRunningDX12 {
-		return
-	}
-
-	// 检查注入状态
-	injectStatus := service.Inject.IsInjected()
-	switch injectStatus {
-	case utils.InjectStatusRunningIPv6:
-		p.serverStartStopButton.SetText("请先返回至主菜单")
-		return
-	case utils.InjectStatusInjected:
-		p.serverStartStopButton.SetText("移除注入")
-	case utils.InjectStatusNotInjected:
-		p.serverStartStopButton.SetText("以服务器模式注入")
-	default:
-		p.serverStartStopButton.SetText("未知")
-	}
-	enabled = true
+func (p *ServerPage) GetStartStopButtonReady() bool {
+	return true
 }
 
-func (p *ServerPage) OnServerStartStopButtonClicked() {
-	injectStatus := service.Inject.IsInjected()
-	if injectStatus == utils.InjectStatusInjected || injectStatus == utils.InjectStatusRunningIPv6 {
-		p.StopServer()
-	} else {
-		p.StartServer()
-	}
-}
-
-func (p *ServerPage) StartServer() {
-	if err := utils.WriteConfig("::0"); err != nil {
-		errStr := strings.TrimSpace(err.Error())
-		p.LogError(fmt.Errorf("写入配置文件失败: %v（请尝试以管理员身份运行）", errStr))
-		return
-	}
-	path, ok := utils.GetInjectorPath()
-	if !ok {
-		p.LogError(fmt.Errorf("注入工具未找到"))
-		return
-	}
-	cmd := exec.Command(path, "-s")
-	err := cmd.Start()
-	if err != nil {
-		p.LogError(fmt.Errorf("启动注入工具失败: %v", err))
-		return
-	}
-	if p.closeAfterStartCheckBox.Checked() {
-		os.Exit(0)
-	}
-	p.LogInfo("启动注入工具成功")
-}
-
-func (p *ServerPage) StopServer() {
-	path, ok := utils.GetInjectRemoverPath()
-	if !ok {
-		p.LogError(fmt.Errorf("注入移除工具未找到"))
-		return
-	}
-	cmd := exec.Command(path)
-	err := cmd.Start()
-	if err != nil {
-		p.LogError(fmt.Errorf("启动注入移除工具失败: %v", err))
-		return
-	}
-	p.LogInfo("启动注入移除工具成功")
+func (p *ServerPage) GetConfigContent() string {
+	return "::0"
 }

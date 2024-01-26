@@ -7,18 +7,19 @@
 #include <iphlpapi.h>
 #include <psapi.h>
 #include <shellapi.h>
+#include <shlobj.h>
 #include <stdio.h>
 #include <ws2tcpip.h>
 
-bool runas_admin(const char *exename) {
-    SHELLEXECUTEINFOA sei;
+bool runas_admin(LPCWSTR exename) {
+    SHELLEXECUTEINFOW sei;
     memset(&sei, 0, sizeof(sei));
     sei.cbSize = sizeof(sei);
     sei.fMask = SEE_MASK_FLAG_DDEWAIT | SEE_MASK_FLAG_NO_UI;
-    sei.lpVerb = "runas";
+    sei.lpVerb = L"runas";
     sei.lpFile = exename;
     sei.nShow = SW_SHOWNORMAL;
-    return ShellExecuteExA(&sei);
+    return ShellExecuteExW(&sei);
 }
 
 DWORD get_civ6_dx11_proc() {

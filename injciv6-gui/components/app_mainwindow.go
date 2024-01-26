@@ -1,6 +1,9 @@
 package components
 
-import "injciv6-gui/service"
+import (
+	"injciv6-gui/service"
+	"injciv6-gui/utils"
+)
 
 type AppMainWindow struct {
 	AppName string
@@ -44,5 +47,8 @@ func (mw *AppMainWindow) updateTitle(prefix string) {
 		title = prefix + " - "
 	}
 	title += mw.AppName
+	if utils.IsAdmin() {
+		title += "（管理员）"
+	}
 	mw.SetTitle(title)
 }

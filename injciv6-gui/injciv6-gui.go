@@ -2,6 +2,7 @@ package main
 
 import (
 	"injciv6-gui/components"
+	"injciv6-gui/service"
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
@@ -58,6 +59,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	service.Set("AppMainWindowHandle", amw)
 	amw.RefreshTitle()
 	amw.Run()
 }

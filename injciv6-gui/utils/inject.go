@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -55,6 +56,20 @@ const (
 	InjectStatusRunningIPv6 InjectStatus = 3
 )
 
+func RunAsAdmin(exepath string) (bool, error) {
+	pExePath, err := syscall.UTF16PtrFromString(exepath)
+	if err != nil {
+		return false, err
+	}
+	ret := bool(C.runas_admin((*C.wchar_t)(unsafe.Pointer(pExePath))))
+	return ret, nil
+}
+
+func IsAdmin() bool {
+	isAdmin := C.IsUserAnAdmin() != C.int(0)
+	return isAdmin
+}
+
 func IsCiv6Injected() InjectStatus {
 	dllCstr := C.CString("hookdll64.dll")
 	defer C.free(unsafe.Pointer(dllCstr))
@@ -74,6 +89,9 @@ func GetCiv6Path() (string, error) {
 	success := C.get_civ6_path((*C.wchar_t)(unsafe.Pointer(&buf[0])), C.ulong(len(buf)))
 	str := syscall.UTF16ToString(buf)
 	if !success {
+		str = strings.TrimSpace(str)
+		str = strings.TrimRight(str, "。")
+		str = strings.TrimRight(str, ".")
 		return "", fmt.Errorf(str)
 	}
 	return str, nil
