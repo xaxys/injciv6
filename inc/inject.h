@@ -6,6 +6,7 @@
 extern "C" {
 #endif
 
+bool grant_se_debug_privilege();
 bool inject_dll(DWORD pid, const char *dll_path);
 DWORD find_pid_by_name(const char *name);
 HMODULE find_module_handle_from_pid(DWORD pid, const char *module_name);

@@ -56,6 +56,11 @@ const (
 	InjectStatusRunningIPv6 InjectStatus = 3
 )
 
+func GrantSeDebugPrivilege() bool {
+	success := bool(C.grant_se_debug_privilege())
+	return success
+}
+
 func RunAsAdmin(exepath string) (bool, error) {
 	pExePath, err := syscall.UTF16PtrFromString(exepath)
 	if err != nil {

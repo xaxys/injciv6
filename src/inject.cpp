@@ -6,6 +6,32 @@
 extern "C" {
 #endif
 
+bool grant_se_debug_privilege()
+{
+    HANDLE htoken;
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES, &htoken)) {
+        return false;
+    }
+    TOKEN_PRIVILEGES tp;
+    tp.PrivilegeCount = 1;
+    if (!LookupPrivilegeValueA(NULL, "SeDebugPrivilege", &tp.Privileges[0].Luid)) {
+        CloseHandle(htoken);
+        return false;
+    }
+    tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+    if (!AdjustTokenPrivileges(htoken, FALSE, &tp, sizeof(TOKEN_PRIVILEGES), NULL, NULL)) {
+        CloseHandle(htoken);
+        return false;
+    }
+    DWORD result = GetLastError();
+    if (result == ERROR_NOT_ALL_ASSIGNED) {
+        CloseHandle(htoken);
+        return false;
+    }
+    CloseHandle(htoken);
+    return true;
+}
+
 bool inject_dll(DWORD pid, const char *dll_path)
 {
     int path_len = strlen(dll_path) + 1;

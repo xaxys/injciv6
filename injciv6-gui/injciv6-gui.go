@@ -3,6 +3,7 @@ package main
 import (
 	"injciv6-gui/components"
 	"injciv6-gui/service"
+	"injciv6-gui/utils"
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
@@ -26,6 +27,10 @@ func init() {
 }
 
 func main() {
+	if utils.IsAdmin() {
+		seDebug := utils.GrantSeDebugPrivilege()
+		service.Set("SeDebugPrivilege", seDebug)
+	}
 	cfg := &components.MultiPageMainWindowConfig{
 		Name:    "mainWindow",
 		Icon:    appIcon,

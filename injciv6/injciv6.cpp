@@ -27,6 +27,13 @@ int main(int argc, char *argv[])
     fclose(fp);
     int msgres = 0;
     bool isadmin = IsUserAnAdmin(); // 检测当前是否有管理员权限，需要shlobj.h
+    bool se_debug = false;
+    if (isadmin) {
+        se_debug = grant_se_debug_privilege(); // 尝试获取SE_DEBUG权限
+        if (!se_debug && !silence) {
+            MessageBoxW(0, L"获取SE_DEBUG权限失败，后续可能会出现禁止访问的错误", L"警告", MB_ICONWARNING);
+        }
+    }
     DWORD civ6pid = 0;
     while (1) {
         civ6pid = get_civ6_proc();

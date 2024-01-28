@@ -49,6 +49,9 @@ func (mw *AppMainWindow) updateTitle(prefix string) {
 	title += mw.AppName
 	if utils.IsAdmin() {
 		title += "（管理员）"
+		if !service.GetWithDef("SeDebugPrivilege", false) {
+			title += " [No SeDebug]"
+		}
 	}
 	mw.SetTitle(title)
 }

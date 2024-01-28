@@ -15,6 +15,10 @@ int main(int argc, char *argv[])
             goto retry_runas;
         return 0;
     }
+    bool se_debug = grant_se_debug_privilege(); // 尝试获取SE_DEBUG权限
+    if (!se_debug) {
+        MessageBoxW(0, L"获取SE_DEBUG权限失败，后续可能会出现禁止访问的错误", L"警告", MB_ICONWARNING);
+    }
     DWORD pid = 0;
     HMODULE module_handle = 0;
     pid = get_civ6_proc();

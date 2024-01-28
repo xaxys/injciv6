@@ -1,7 +1,6 @@
 #include <winsock2.h>
 
 #include "inject.h"
-#include "inject_util.h"
 
 #include <Shlwapi.h>
 #include <iphlpapi.h>
