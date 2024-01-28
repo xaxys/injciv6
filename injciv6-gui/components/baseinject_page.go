@@ -191,14 +191,14 @@ func (p *BaseInjectPage) OnIPv6StatusChanged(status service.IPv6WithStatus) {
 		p.ipv6StatusLabel.SetTextColor(ColorYellow)
 		p.ipv6StatusLabel.SetToolTipText(status.IPv6)
 		p.ipv6ExplainLabel.SetVisible(true)
-		p.ipv6ExplainLabel.SetToolTipText("您可以通过IPv6上网，但您的DNS服务器不支持IPv6，IPv6域名功能将无法使用")
+		p.ipv6ExplainLabel.SetToolTipText("您可以通过IPv6上网，但您的DNS服务器不支持IPv6。可以正常输入IPv6地址联机，但IPv6域名功能将无法使用")
 
 	case utils.IPv6StatusDNSNotPreferred, utils.IPv6StatusDNSNotPreferredMultiple:
 		p.ipv6StatusLabel.SetText("支持（非首选地址）")
-		p.ipv6StatusLabel.SetTextColor(ColorYellowGreen)
+		p.ipv6StatusLabel.SetTextColor(ColorGreen)
 		p.ipv6StatusLabel.SetToolTipText(status.IPv6)
 		p.ipv6ExplainLabel.SetVisible(true)
-		p.ipv6ExplainLabel.SetToolTipText("您可以通过IPv6上网，您的DNS服务器也支持IPv6，但您的电脑似乎不太愿意使用IPv6，IPv6域名功能可能无法使用")
+		p.ipv6ExplainLabel.SetToolTipText("您可以通过IPv6上网，您的DNS服务器也支持IPv6，但您的电脑似乎不太愿意使用IPv6。可以正常输入IPv6地址联机，但双栈域名功能可能无法使用")
 
 	case utils.IPv6StatusSupported, utils.IPv6StatusSupportedMultiple:
 		p.ipv6StatusLabel.SetText("支持")
