@@ -1,8 +1,8 @@
 package components
 
 import (
-	"injciv6-gui/service"
-	"injciv6-gui/utils"
+	"injbg3-gui/service"
+	"injbg3-gui/utils"
 )
 
 type AppMainWindow struct {

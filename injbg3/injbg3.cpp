@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <shlobj.h>
 #include "inject.h"
-#include "injciv6.h"
+#include "injbg3.h"
 
 int main(int argc, char *argv[])
 {
@@ -34,17 +34,17 @@ int main(int argc, char *argv[])
             MessageBoxW(0, L"获取SE_DEBUG权限失败，后续可能会出现禁止访问的错误", L"警告", MB_ICONWARNING);
         }
     }
-    DWORD civ6pid = 0;
+    DWORD bg3pid = 0;
     while (1) {
-        civ6pid = get_civ6_proc();
-        if (civ6pid != 0)
+        bg3pid = get_bg3_proc();
+        if (bg3pid != 0)
             break;
         msgres = MessageBoxW(0, L"请先运行游戏，然后点击重试", L"错误", MB_RETRYCANCEL | MB_ICONERROR);
         if (msgres != IDRETRY)
             return 0;
     }
     bool reinj = false;
-    HMODULE dll = find_module_handle_from_pid(civ6pid, "hookdll64.dll");
+    HMODULE dll = find_module_handle_from_pid(bg3pid, "hookdll64.dll");
     if (dll != 0) {
         msgres = IDYES;
         if (!silence)
@@ -60,7 +60,7 @@ int main(int argc, char *argv[])
                 goto retry_runas_silence;
             return 0;
         }
-        if (!remove_module(civ6pid, dll)) {
+        if (!remove_module(bg3pid, dll)) {
             MessageBoxW(0, L"移除失败", L"错误", MB_ICONERROR);
             return 0;
         }
@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
     }
 retry_inject:
     // 尝试注入
-    if (inject_dll(civ6pid, dll_path)) {
+    if (inject_dll(bg3pid, dll_path)) {
         if (reinj)
             MessageBoxW(0, L"重新注入成功！", L"成功", MB_OK);
         else

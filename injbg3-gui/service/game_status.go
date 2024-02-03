@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"injciv6-gui/utils"
+	"injbg3-gui/utils"
 	"sync"
 	"time"
 )
@@ -16,23 +16,23 @@ func init() {
 }
 
 type GameStatusService struct {
-	status   utils.Civ6Status
+	status   utils.BG3Status
 	interval time.Duration
 	lock     sync.RWMutex
 	cancel   context.CancelFunc
-	listener EventManager[utils.Civ6Status]
+	listener EventManager[utils.BG3Status]
 }
 
 func NewGameStatusService(interval time.Duration) *GameStatusService {
 	service := &GameStatusService{
-		status:   utils.Civ6StatusUnknown,
+		status:   utils.BG3StatusUnknown,
 		interval: interval,
 	}
 	service.Listener().FastLaunch(service.Status)
 	return service
 }
 
-func (g *GameStatusService) Status() utils.Civ6Status {
+func (g *GameStatusService) Status() utils.BG3Status {
 	g.lock.RLock()
 	defer g.lock.RUnlock()
 	return g.status
@@ -40,7 +40,7 @@ func (g *GameStatusService) Status() utils.Civ6Status {
 
 func (g *GameStatusService) UpdateStatus() {
 	status := g.Status()
-	new_status := utils.IsCiv6Running()
+	new_status := utils.IsBG3Running()
 	g.lock.Lock()
 	g.status = new_status
 	g.lock.Unlock()
@@ -82,6 +82,6 @@ func (g *GameStatusService) StopService() {
 	}
 }
 
-func (g *GameStatusService) Listener() *EventManager[utils.Civ6Status] {
+func (g *GameStatusService) Listener() *EventManager[utils.BG3Status] {
 	return &g.listener
 }

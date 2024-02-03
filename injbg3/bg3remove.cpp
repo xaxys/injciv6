@@ -1,6 +1,6 @@
 #include <shlobj.h>
 #include "inject.h"
-#include "injciv6.h"
+#include "injbg3.h"
 
 int main(int argc, char *argv[])
 {
@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
     }
     DWORD pid = 0;
     HMODULE module_handle = 0;
-    pid = get_civ6_proc();
+    pid = get_bg3_proc();
     if (pid == 0) {
         MessageBoxW(0, L"找不到游戏进程", L"错误", MB_ICONERROR);
         return 0;

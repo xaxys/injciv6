@@ -2,8 +2,8 @@ package components
 
 import (
 	"fmt"
-	"injciv6-gui/service"
-	"injciv6-gui/utils"
+	"injbg3-gui/service"
+	"injbg3-gui/utils"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -79,11 +79,11 @@ func (p *ToolsPage) LogError(err error) {
 func (p *ToolsPage) OpenFile(name, filename string) {
 	status := service.Game.Status()
 
-	if status != utils.Civ6StatusRunningDX11 && status != utils.Civ6StatusRunningDX12 {
+	if status != utils.BG3StatusRunningDX11 && status != utils.BG3StatusRunningDX12 {
 		p.LogError(fmt.Errorf("请先运行游戏"))
 		return
 	}
-	dir, err := utils.GetCiv6Dir()
+	dir, err := utils.Getbg3Dir()
 	if err != nil {
 		errStr := strings.TrimSpace(err.Error())
 		p.LogError(fmt.Errorf("获取%s文件路径失败: %s", name, errStr))
@@ -109,9 +109,9 @@ func (p *ToolsPage) OpenFile(name, filename string) {
 }
 
 func (p *ToolsPage) OpenConfigFile() {
-	p.OpenFile("配置文件", "injciv6-config.txt")
+	p.OpenFile("配置文件", "injbg3-config.txt")
 }
 
 func (p *ToolsPage) OpenLogFile() {
-	p.OpenFile("日志文件", "injciv6-log.txt")
+	p.OpenFile("日志文件", "injbg3-log.txt")
 }

@@ -4,12 +4,12 @@ cxxflags = -c -O1 -I ../inc
 cxx64prefix = x86_64-w64-mingw32-
 objdir = ./obj/
 bindir = ../bin/
-src_inject = injciv6.cpp inject.cpp
-src_remove = civ6remove.cpp inject.cpp
+src_inject = injbg3.cpp inject.cpp
+src_remove = bg3remove.cpp inject.cpp
 obj_inject = $(patsubst %.cpp, $(objdir)%.o, $(src_inject))
 obj_remove = $(patsubst %.cpp, $(objdir)%.o, $(src_remove))
-target_inject = $(bindir)injciv6.exe
-target_remove = $(bindir)civ6remove.exe
+target_inject = $(bindir)injbg3.exe
+target_remove = $(bindir)bg3remove.exe
 
 all: check $(target_inject) $(target_remove)
 

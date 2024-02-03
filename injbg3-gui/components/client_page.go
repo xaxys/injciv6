@@ -2,8 +2,8 @@ package components
 
 import (
 	"fmt"
-	"injciv6-gui/service"
-	"injciv6-gui/utils"
+	"injbg3-gui/service"
+	"injbg3-gui/utils"
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
@@ -161,9 +161,9 @@ func (p *ClientPage) OnIPv6Error(err error) {
 	p.LogError(err)
 }
 
-func (p *ClientPage) OnGameStatusChanged(status utils.Civ6Status) {
+func (p *ClientPage) OnGameStatusChanged(status utils.BG3Status) {
 	switch status {
-	case utils.Civ6StatusRunningDX11, utils.Civ6StatusRunningDX12:
+	case utils.BG3StatusRunningDX11, utils.BG3StatusRunningDX12:
 		if p.serverAddrEdit.Text() == "" {
 			addr, err := utils.ReadConfig()
 			if err != nil {

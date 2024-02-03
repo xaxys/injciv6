@@ -1,9 +1,9 @@
 package main
 
 import (
-	"injciv6-gui/components"
-	"injciv6-gui/service"
-	"injciv6-gui/utils"
+	"injbg3-gui/components"
+	"injbg3-gui/service"
+	"injbg3-gui/utils"
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
@@ -60,7 +60,7 @@ func main() {
 			},
 		},
 	}
-	amw, err := components.NewAppMainWindow("injciv6-gui", cfg)
+	amw, err := components.NewAppMainWindow("injbg3-gui", cfg)
 	if err != nil {
 		panic(err)
 	}

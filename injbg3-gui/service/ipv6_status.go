@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"injciv6-gui/utils"
+	"injbg3-gui/utils"
 	"sync"
 	"time"
 )

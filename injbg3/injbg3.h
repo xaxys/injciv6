@@ -16,10 +16,10 @@ inline bool runas_admin(const char *exename, const char* args = NULL)
     return ShellExecuteExA(&sei);
 }
 
-inline DWORD get_civ6_proc()
+inline DWORD get_bg3_proc()
 {
-    DWORD pid = find_pid_by_name("CivilizationVI.exe");
+    DWORD pid = find_pid_by_name("bg3.exe");
     if (pid == 0)
-        pid = find_pid_by_name("CivilizationVI_DX12.exe");
+        pid = find_pid_by_name("bg3_dx11.exe");
     return pid;
 }

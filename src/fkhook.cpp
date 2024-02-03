@@ -8,7 +8,7 @@
 #include <cstring>
 #include <ctime>
 #include <mutex>
-// #include <iphlpapi.h>
+#include <iphlpapi.h>
 #include <algorithm>
 #include <map>
 #include <string>
@@ -322,9 +322,9 @@ static char address[256] = "255.255.255.255";
 #ifdef DEBUG_ENABLE
 static void write_debug_impl(const char *fmt, ...)
 {
-    // FILE *fp = fopen("injciv6-debug.txt", "r");
+    // FILE *fp = fopen("injbg3-debug.txt", "r");
     // if (!fp) return;
-    FILE *fp = fopen("injciv6-debug.txt", "a+");
+    FILE *fp = fopen("injbg3-debug.txt", "a+");
     if (fp) {
         time_t now = time(0);
         struct tm *timeinfo = localtime(&now);
@@ -359,7 +359,7 @@ static void write_socks_impl()
 #ifdef LOG_ENABLE
 static void write_log_impl(const char *fmt, ...)
 {
-    FILE *fp = fopen("injciv6-log.txt", "a+");
+    FILE *fp = fopen("injbg3-log.txt", "a+");
     if (fp) {
         time_t now = time(0);
         struct tm *timeinfo = localtime(&now);
@@ -383,11 +383,11 @@ static void write_log_impl(const char *fmt, ...)
 
 static void read_config()
 {
-    FILE *fp = fopen("injciv6-config.txt", "r");
+    FILE *fp = fopen("injbg3-config.txt", "r");
     if (fp) {
         fscanf(fp, "%s", address);
     } else {
-        fp = fopen("injciv6-config.txt", "w+");
+        fp = fopen("injbg3-config.txt", "w+");
         if (fp) {
             fprintf(fp, "%s", address);
         }
@@ -396,46 +396,53 @@ static void read_config()
 }
 
 // 如果需要使用这个函数，需要在编译时链接 iphlpapi.lib，即 linkflags 加上 -l iphlpapi
-// in_addr get_broadcast_ip(const struct in_addr& ip) {
-//     in_addr broadcast_ip = {0};
-//     IP_ADAPTER_INFO adapterInfo[32]; // 静态储存空间
+in_addr get_broadcast_ip(const struct in_addr& ip) {
+    in_addr broadcast_ip = {0};
+    IP_ADAPTER_INFO adapterInfo[32]; // 静态储存空间
 
-//     // 获取网络适配器信息
-//     PIP_ADAPTER_INFO pAdapterInfo = adapterInfo; // 指向静态储存空间
-//     ULONG ulOutBufLen = sizeof(adapterInfo);
+    // 获取网络适配器信息
+    PIP_ADAPTER_INFO pAdapterInfo = adapterInfo; // 指向静态储存空间
+    ULONG ulOutBufLen = sizeof(adapterInfo);
 
-//     DWORD dwRetVal;
-//     dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen);
-//     if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
-//         pAdapterInfo = (IP_ADAPTER_INFO *) malloc(ulOutBufLen); // 空间不够，动态重新分配 ulOutBufLen 会被修改为实际长度
-//         dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen);
-//     }
+    DWORD dwRetVal;
+    dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen);
+    if (dwRetVal == ERROR_BUFFER_OVERFLOW) {
+        pAdapterInfo = (IP_ADAPTER_INFO *) malloc(ulOutBufLen); // 空间不够，动态重新分配 ulOutBufLen 会被修改为实际长度
+        dwRetVal = GetAdaptersInfo(pAdapterInfo, &ulOutBufLen);
+    }
 
-//     if (dwRetVal != NO_ERROR) {
-//         write_log("GetAdaptersInfo failed: %d\n", dwRetVal);
-//         return broadcast_ip;
-//     }
+    if (dwRetVal != NO_ERROR) {
+        write_log("GetAdaptersInfo failed: %d\n", dwRetVal);
+        return broadcast_ip;
+    }
 
-//     for (PIP_ADAPTER_INFO pAdapter = pAdapterInfo; pAdapter; pAdapter = pAdapter->Next) {
-//         // 检查ip是否在当前适配器的子网内
-//         ULONG adpt_ip = inet_addr(pAdapter->IpAddressList.IpAddress.String);
-//         ULONG mask = inet_addr(pAdapter->IpAddressList.IpMask.String);
-//         if (adpt_ip == INADDR_ANY || mask == INADDR_ANY) {
-//             continue;
-//         }
-//         if ((ip.S_un.S_addr & mask) == (adpt_ip & mask)) {
-//             // 计算广播地址
-//             broadcast_ip.S_un.S_addr = ip.S_un.S_addr | ~mask;
-//             return broadcast_ip;
-//         }
-//     }
+    for (PIP_ADAPTER_INFO pAdapter = pAdapterInfo; pAdapter; pAdapter = pAdapter->Next) {
+        // 检查ip是否在当前适配器的子网内
+        ULONG adpt_ip = _inet_addr(pAdapter->IpAddressList.IpAddress.String);
+        ULONG mask = _inet_addr(pAdapter->IpAddressList.IpMask.String);
+        if (adpt_ip == INADDR_ANY || mask == INADDR_ANY) {
+            continue;
+        }
+        if ((ip.S_un.S_addr & mask) == (adpt_ip & mask)) {
+            // 计算广播地址
+            broadcast_ip.S_un.S_addr = ip.S_un.S_addr | ~mask;
+            return broadcast_ip;
+        }
+    }
 
-//     if (pAdapterInfo != adapterInfo) {
-//         free(pAdapterInfo);
-//     }
+    if (pAdapterInfo != adapterInfo) {
+        free(pAdapterInfo);
+    }
 
-//     return broadcast_ip;
-// }
+    return broadcast_ip;
+}
+
+bool is_broadcast_ip(const struct in_addr& ip) {
+    if (ip.S_un.S_addr == INADDR_BROADCAST) return true;
+    in_addr broadcast_ip = get_broadcast_ip(ip);
+    if (ip.S_un.S_addr == broadcast_ip.S_un.S_addr) return true;
+    return false;
+}
 
 // hook后替换的函数
 static int WINAPI fake_wsasendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCount, LPDWORD lpNumberOfBytesSent, DWORD dwFlags, const sockaddr *lpTo, int iTolen, LPWSAOVERLAPPED lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine)
@@ -461,14 +468,90 @@ static int WINAPI fake_wsasendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCou
         return result;
     }
 
-    int result = _wsasendto(s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpTo, iTolen, lpOverlapped, lpCompletionRoutine);
+    if (!is_broadcast_ip(origin_to->sin_addr)) {
+        int result = _wsasendto(s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpTo, iTolen, lpOverlapped, lpCompletionRoutine);
+#ifdef DEBUG_ENABLE
+        if (result == SOCKET_ERROR) {
+            int errorcode = _wsagetlasterror();
+            write_debug("original wsasendto failed: %d\n", errorcode);
+        }
+        write_debug("original wsasendto: %s, %d, result: %d\n", std::to_string(*origin_to).c_str(), s, result);
+#endif
+        return result;
+    }
+
+    // 重定向广播
+    int result = SOCKET_ERROR;
+
+    SockAddrIn new_to;
+    if (!SockAddrIn::from_addr(address, &new_to)) {
+        write_log("parse address failed: %s\n", address);
+        return true;
+    }
+    new_to.set_port_raw(origin_to->sin_port);
+
+    SOCKET new_sock = s;
+
+    if (socks.count(s)) {
+        new_sock = socks[s];
+    } else if (new_to.get_family() == AF_INET6) {
+        // 获取原sockaddr
+        sockaddr_in origin_local_addr;
+        origin_local_addr.sin_family = AF_INET;
+        int namelen = sizeof(sockaddr_in);
+        _getsockname(s, (sockaddr *)&origin_local_addr, &namelen); // 获取原sockaddr
+        if (origin_local_addr.sin_port == 0) {
+            // 如果没有端口号，先原样发送，这样系统才会分配一个端口号
+            result = _wsasendto(s, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, lpTo, iTolen, lpOverlapped, lpCompletionRoutine);
+            _getsockname(s, (sockaddr *)&origin_local_addr, &namelen); // 重新获取
+        }
+
+        SockAddrIn new_local_addr;
+        new_local_addr.addr.addr_v4.sin_family = new_to.get_family();
+        new_local_addr.set_ip_any();
+        new_local_addr.set_port_raw(origin_local_addr.sin_port);
+
+        SOCKET sock = _socket(new_local_addr.get_family(), SOCK_DGRAM, 0);
+#ifdef LOG_ENABLE
+        if (sock == INVALID_SOCKET) {
+            int errorcode = _wsagetlasterror();
+            write_log("create socket failed while wsasendto: %s -> %s, %d -> %d, errorcode: %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock, errorcode);
+            return SOCKET_ERROR;
+        }
+#endif
+
+        ULONG on = 1;
+        _ioctlsocket(sock, FIONBIO, &on); // 设置为非阻塞, 非常重要，尤其是对于 steam 版的 steam 好友发现 47584 端口不可以去掉
+        BOOL opt = TRUE;
+        _setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&opt, sizeof(BOOL)); // 允许发送广播
+        _setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(BOOL)); // 重用地址端口
+
+        result = _bind(sock, new_local_addr.get_sockaddr(), new_local_addr.get_len()); // 绑定地址端口
+#ifdef LOG_ENABLE
+        if (result == SOCKET_ERROR) {
+            int errorcode = _wsagetlasterror();
+            write_log("bind failed while wsasendto: %s -> %s, %d -> %d, errorcode: %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock, errorcode);
+            return SOCKET_ERROR;
+        }
+#endif
+
+        socks[s] = sock;
+
+        write_socks();
+        write_debug("replace origin_sock: %s -> %s, %d -> %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock);
+
+        new_sock = sock;
+    }
+
+    result = _wsasendto(new_sock, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, new_to.get_sockaddr(), new_to.get_len(), lpOverlapped, lpCompletionRoutine);
 
 #ifdef DEBUG_ENABLE
     if (result == SOCKET_ERROR) {
         int errorcode = _wsagetlasterror();
-        write_debug("original wsasendto failed: %d\n", errorcode);
+        write_debug("redirect wsasendto failed: %d\n", errorcode);
     }
-    write_debug("original wsasendto: %s, %d, result: %d\n", std::to_string(*origin_to).c_str(), s, result);
+    SockAddrIn local_addr = SockAddrIn::from_socket(new_sock);
+    if (result == 0) write_debug("redirect wsasendto: %s -> %s, through: %s, %d -> %d, result: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(local_addr).c_str(), s, new_sock, result);
 #endif
 
     return result;
@@ -615,38 +698,7 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
         return result;
     }
 
-    // in_addr broadcast_ip = get_broadcast_ip(origin_to->sin_addr);
-    // if (origin_to->sin_addr.S_un.S_addr == broadcast_ip.S_un.S_addr) {
-    //     if (!socks.count(s)) {
-    //         // 获取原sockaddr
-    //         sockaddr_in origin_local_addr;
-    //         origin_local_addr.sin_family = AF_INET;
-    //         int namelen = sizeof(sockaddr_in);
-    //         _getsockname(s, (sockaddr *)&origin_local_addr, &namelen); // 获取原sockaddr
-
-    //         bool success = create_fake_socket(s, AF_INET6, origin_local_addr);
-    //         if (!success) {
-    //             return _sendto(s, buf, len, flags, to, tolen); // 创建失败，原样发送
-    //         }
-    //     }
-    //     // 广播地址，向所有 fake-ip 发送
-    //     for (auto fake_addr_entry : fake_addr_pool.v6_to_v4) {
-    //         sockaddr_in6 new_to;
-    //         new_to.sin6_family = AF_INET6;
-    //         new_to.sin6_flowinfo = 0;
-    //         new_to.sin6_scope_id = 0;
-    //         new_to.sin6_addr = fake_addr_entry.first.addr;
-    //         new_to.sin6_port = origin_to->sin_port;
-    //         int result = _sendto(socks[s], buf, len, flags, (sockaddr *)&new_to, sizeof(sockaddr_in6));
-    //         if (result == SOCKET_ERROR) {
-    //             int errorcode = _wsagetlasterror();
-    //             write_debug("broadcast sendto failed: %d\n", errorcode);
-    //         }
-    //     }
-    //     return _sendto(s, buf, len, flags, to, tolen);
-    // }
-
-    if (origin_to->sin_addr.S_un.S_addr != INADDR_BROADCAST) {
+    if (!is_broadcast_ip(origin_to->sin_addr)) {
         int result = _sendto(s, buf, len, flags, to, tolen); // 非广播直接原样发送
         return result;
     }
@@ -661,7 +713,11 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
     }
     new_to.set_port_raw(origin_to->sin_port);
 
-    if (!socks.count(s)) {
+    SOCKET new_sock = s;
+
+    if (socks.count(s)) {
+        new_sock = socks[s];
+    } else if (new_to.get_family() == AF_INET6) {
         // 获取原sockaddr
         sockaddr_in origin_local_addr;
         origin_local_addr.sin_family = AF_INET;
@@ -682,7 +738,7 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
 #ifdef LOG_ENABLE
         if (sock == INVALID_SOCKET) {
             int errorcode = _wsagetlasterror();
-            write_log("create socket failed while sendto: %s -> %s, %d -> %d, result: %d, errorcode: %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock, result, errorcode);
+            write_log("create socket failed while sendto: %s -> %s, %d -> %d, errorcode: %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock, errorcode);
             return SOCKET_ERROR;
         }
 #endif
@@ -693,18 +749,30 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
         _setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&opt, sizeof(BOOL)); // 允许发送广播
         _setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(BOOL)); // 重用地址端口
 
-        _bind(sock, new_local_addr.get_sockaddr(), new_local_addr.get_len()); // 绑定地址端口
+        result = _bind(sock, new_local_addr.get_sockaddr(), new_local_addr.get_len()); // 绑定地址端口
+#ifdef LOG_ENABLE
+        if (result == SOCKET_ERROR) {
+            int errorcode = _wsagetlasterror();
+            write_log("bind failed while sendto: %s -> %s, %d -> %d, errorcode: %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock, errorcode);
+            return SOCKET_ERROR;
+        }
+#endif
 
         socks[s] = sock;
 
         write_socks();
         write_debug("replace origin_sock: %s -> %s, %d -> %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock);
+
+        new_sock = sock;
     }
 
-    SOCKET new_sock = socks[s];
     result = _sendto(new_sock, buf, len, flags, new_to.get_sockaddr(), new_to.get_len());
 
 #ifdef DEBUG_ENABLE
+    if (result == SOCKET_ERROR) {
+        int errorcode = _wsagetlasterror();
+        write_debug("redirect sendto failed: %s -> %s, through: %s, %d -> %d, errorcode: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(SockAddrIn::from_socket(new_sock)).c_str(), s, new_sock, errorcode);
+    }
     SockAddrIn local_addr = SockAddrIn::from_socket(new_sock);
     if (result > 0) write_debug("redirect sendto: %s -> %s, through: %s, %d -> %d, result: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(local_addr).c_str(), s, new_sock, result);
 #endif
@@ -738,7 +806,14 @@ static int WINAPI fake_recvfrom(SOCKET s, char *buf, int len, int flags, sockadd
         SockAddrIn new_from;
         int new_from_len = sizeof(new_from.addr);
         int result = _recvfrom(socks[s], buf, len, flags, new_from.get_sockaddr(), &new_from_len);
-        if (result == SOCKET_ERROR) return result;
+#ifdef LOG_ENABLE
+        if (result == SOCKET_ERROR) {
+            int errorcode = _wsagetlasterror();
+            if (errorcode != WSAEWOULDBLOCK) write_log("redirect recvfrom failed: %s -> %s, %d -> %d, result: %d, errorcode: %d\n", std::to_string(SockAddrIn::from_socket(s)).c_str(), std::to_string(SockAddrIn::from_socket(socks[s])).c_str(), s, socks[s], result, errorcode);
+            return SOCKET_ERROR;
+        }
+#endif
+
         switch (new_from.get_family()) {
         case AF_INET: // 如果是v4地址，直接返回
             {
@@ -772,6 +847,10 @@ static int WINAPI fake_recvfrom(SOCKET s, char *buf, int len, int flags, sockadd
     int result = _recvfrom(s, buf, len, flags, from, fromlen);
 
 #ifdef DEBUG_ENABLE
+    if (result == SOCKET_ERROR) {
+        int errorcode = _wsagetlasterror();
+        write_debug("original recvfrom failed: %d\n", errorcode);
+    }
     if (result > 0) write_debug("original recvfrom: %s, %d, result: %d\n", std::to_string(*((sockaddr_in *)from)).c_str(), s, result);
 #endif
 

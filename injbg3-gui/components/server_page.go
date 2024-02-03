@@ -3,8 +3,8 @@ package components
 import (
 	"fmt"
 
-	"injciv6-gui/service"
-	"injciv6-gui/utils"
+	"injbg3-gui/service"
+	"injbg3-gui/utils"
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
@@ -119,7 +119,7 @@ func (p *ServerPage) OnIPv6StatusChanged(status service.IPv6WithStatus) {
 func (p *ServerPage) OnIPv6Error(err error) {
 }
 
-func (p *ServerPage) OnGameStatusChanged(status utils.Civ6Status) {
+func (p *ServerPage) OnGameStatusChanged(status utils.BG3Status) {
 }
 
 func (p *ServerPage) OnInjectStatusChanged(injectStatus utils.InjectStatus) {

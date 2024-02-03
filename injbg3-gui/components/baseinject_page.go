@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"injciv6-gui/service"
-	"injciv6-gui/utils"
+	"injbg3-gui/service"
+	"injbg3-gui/utils"
 
 	"github.com/lxn/walk"
 	. "github.com/lxn/walk/declarative"
@@ -19,7 +19,7 @@ type BaseInjectPageCfg struct {
 	GetStartStopButtonReady func() bool
 	OnIPv6Status            func(status service.IPv6WithStatus)
 	OnIPv6Error             func(err error)
-	OnGameStatus            func(status utils.Civ6Status)
+	OnGameStatus            func(status utils.BG3Status)
 	OnInjectStatus          func(injectStatus utils.InjectStatus)
 	OnInfo                  func(msg string)
 	OnError                 func(err error)
@@ -222,11 +222,11 @@ func (p *BaseInjectPage) OnIPv6Error(err error) {
 	p.LogError(err)
 }
 
-func (p *BaseInjectPage) OnGameStatusChanged(status utils.Civ6Status) {
+func (p *BaseInjectPage) OnGameStatusChanged(status utils.BG3Status) {
 	p.gameStatusLabel.SetSuspended(true)
 
 	setGamePathTip := func() {
-		path, err := utils.GetCiv6Path()
+		path, err := utils.GetBG3Path()
 		if err != nil {
 			err = fmt.Errorf("获取游戏路径失败: %v", err)
 			p.gameStatusLabel.SetToolTipText(err.Error())
@@ -236,12 +236,12 @@ func (p *BaseInjectPage) OnGameStatusChanged(status utils.Civ6Status) {
 	}
 
 	switch status {
-	case utils.Civ6StatusRunningDX11:
+	case utils.BG3StatusRunningDX11:
 		p.gameStatusLabel.SetText("运行中 (DX11)")
 		p.gameStatusLabel.SetTextColor(ColorGreen)
 		setGamePathTip()
 
-	case utils.Civ6StatusRunningDX12:
+	case utils.BG3StatusRunningDX12:
 		p.gameStatusLabel.SetText("运行中 (DX12)")
 		p.gameStatusLabel.SetTextColor(ColorGreen)
 		setGamePathTip()
@@ -288,7 +288,7 @@ func (p *BaseInjectPage) updateClientStartStopButton() {
 	// 检查游戏是否运行
 	gameStatus := service.Game.Status()
 	switch gameStatus {
-	case utils.Civ6StatusRunningDX11, utils.Civ6StatusRunningDX12:
+	case utils.BG3StatusRunningDX11, utils.BG3StatusRunningDX12:
 		// pass
 	default:
 		return
@@ -297,10 +297,7 @@ func (p *BaseInjectPage) updateClientStartStopButton() {
 	// 检查注入状态
 	injectStatus := service.Inject.IsInjected()
 	switch injectStatus {
-	case utils.InjectStatusRunningIPv6:
-		p.startStopButton.SetText("请先返回至游戏主菜单")
-		return
-	case utils.InjectStatusInjected:
+	case utils.InjectStatusRunningIPv6, utils.InjectStatusInjected:
 		p.startStopButton.SetText("移除注入")
 	case utils.InjectStatusNotInjected:
 		p.startStopButton.SetText(fmt.Sprintf("以%s模式注入", p.baseInjectPageCfg.PageName))

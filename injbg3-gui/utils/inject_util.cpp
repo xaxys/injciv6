@@ -21,17 +21,17 @@ bool runas_admin(LPCWSTR exename) {
     return ShellExecuteExW(&sei);
 }
 
-DWORD get_civ6_dx11_proc() {
-    return find_pid_by_name("CivilizationVI.exe");
+DWORD get_bg3_dx11_proc() {
+    return find_pid_by_name("bg3_dx11.exe");
 }
 
-DWORD get_civ6_dx12_proc() {
-    return find_pid_by_name("CivilizationVI_DX12.exe");
+DWORD get_bg3_dx12_proc() {
+    return find_pid_by_name("bg3.exe");
 }
 
-DWORD get_civ6_proc() {
-    DWORD pid = get_civ6_dx11_proc();
-    if (pid == 0) pid = get_civ6_dx12_proc();
+DWORD get_bg3_proc() {
+    DWORD pid = get_bg3_dx11_proc();
+    if (pid == 0) pid = get_bg3_dx12_proc();
     return pid;
 }
 
@@ -55,13 +55,13 @@ bool get_proc_path(DWORD pid, LPWSTR buf, DWORD bufsize) {
     return true;
 }
 
-bool get_civ6_path(LPWSTR buf, DWORD bufsize) {
-    DWORD pid = get_civ6_proc();
+bool get_bg3_path(LPWSTR buf, DWORD bufsize) {
+    DWORD pid = get_bg3_proc();
     if (pid == 0) return false;
     return get_proc_path(pid, buf, bufsize);
 }
 
-bool is_injciv6_running(DWORD pid) {
+bool is_injbg3_running(DWORD pid) {
     MIB_UDP6TABLE_OWNER_PID staticUdpTable[128];
     PMIB_UDP6TABLE_OWNER_PID pUdpTable = staticUdpTable;
     DWORD dwSize = sizeof(staticUdpTable);
@@ -85,11 +85,11 @@ bool is_injciv6_running(DWORD pid) {
             if (memcmp(pUdpTable->table[i].ucLocalAddr, zero, 16) != 0) continue;
 
             u_short port = ntohs((u_short)pUdpTable->table[i].dwLocalPort);
-            if (port >= 62900 && port <= 62999) {
+            if (port >= 23253 && port <= 23262) {
                 found = true;
                 break;
             }
-            if (port == 62056) {
+            if (port == 23243) {
                 found = true;
                 break;
             }

@@ -1,4 +1,4 @@
-module injciv6-gui
+module injbg3-gui
 
 go 1.21.0
 

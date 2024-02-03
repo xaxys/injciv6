@@ -33,7 +33,7 @@ func NewAboutPage(parent walk.Container) (Page, error) {
 					Label{
 						Font:          Font{PointSize: 10},
 						TextAlignment: AlignNear,
-						Text:          "injciv6-gui",
+						Text:          "injbg3-gui",
 					},
 					HSpacer{},
 					Label{
@@ -71,7 +71,7 @@ func NewAboutPage(parent walk.Container) (Page, error) {
 					Label{
 						Font:          Font{PointSize: 10},
 						TextAlignment: AlignNear,
-						Text:          "GitHub: github.com/xaxys/injciv6",
+						Text:          "GitHub: github.com/xaxys/injbg3",
 					},
 				},
 				Alignment: AlignHCenterVCenter,
@@ -90,7 +90,7 @@ func NewAboutPage(parent walk.Container) (Page, error) {
 }
 
 func (p *AboutPage) OpenRepo(link *walk.LinkLabelLink) {
-	url := "https://github.com/xaxys/injciv6"
+	url := "https://github.com/xaxys/injbg3"
 	err := exec.Command("cmd", "/c", "start", url).Start()
 	if err != nil {
 		fmt.Println(err)

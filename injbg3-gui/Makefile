@@ -1,5 +1,5 @@
 # Copyright (C) 2023 xaxys. All rights reserved.
-PACKAGE_NAME := injciv6-gui
+PACKAGE_NAME := injbg3-gui
 
 GO         ?= go.exe
 PWD        := ${CURDIR}
@@ -30,7 +30,7 @@ build:
 	@$(GO) env -w CGO_ENABLED=1 CC="$(CC)" CXX="$(CXX)"
 	@$(GO) build \
 		-tags walk_use_cgo \
-		-ldflags="-H windowsgui -X 'injciv6-gui/components.BuildTags=$(BUILD_TAGS)' -X 'injciv6-gui/components.BuildTime=$(BUILD_TIME)' -X 'injciv6-gui/components.GitCommit=$(GIT_COMMIT)' -X 'injciv6-gui/components.GoVersion=$(GO_VERSION)'" \
+		-ldflags="-H windowsgui -X 'injbg3-gui/components.BuildTags=$(BUILD_TAGS)' -X 'injbg3-gui/components.BuildTime=$(BUILD_TIME)' -X 'injbg3-gui/components.GitCommit=$(GIT_COMMIT)' -X 'injbg3-gui/components.GoVersion=$(GO_VERSION)'" \
 		-o $(BIN_DIR)/$(TARGET)
 
 run: build

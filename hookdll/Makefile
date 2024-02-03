@@ -1,7 +1,7 @@
 vpath %.cpp ../src
 cxx = g++
-cxxflags = -c -O2 -I ../inc -I ../minhook/include -Wall -Werror
-linkflags = -shared -static
+cxxflags = -c -O2 -I ../inc -I ../minhook/include -Wall
+linkflags = -shared -static -l iphlpapi
 linkflags32 = -L ../minhook/lib -l MinHook32
 linkflags64 = -L ../minhook/lib -l MinHook64
 cxx32prefix = i686-w64-mingw32-

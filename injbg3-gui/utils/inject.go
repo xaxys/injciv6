@@ -24,27 +24,27 @@ import (
 	"unsafe"
 )
 
-type Civ6Status int
+type BG3Status int
 
 const (
-	Civ6StatusNotFound    Civ6Status = -1
-	Civ6StatusUnknown     Civ6Status = 0
-	Civ6StatusRunningDX11 Civ6Status = 1
-	Civ6StatusRunningDX12 Civ6Status = 2
+	BG3StatusNotFound    BG3Status = -1
+	BG3StatusUnknown     BG3Status = 0
+	BG3StatusRunningDX11 BG3Status = 1
+	BG3StatusRunningDX12 BG3Status = 2
 )
 
-func IsCiv6Running() Civ6Status {
-	dx11 := C.get_civ6_dx11_proc()
+func IsBG3Running() BG3Status {
+	dx11 := C.get_bg3_dx11_proc()
 	if dx11 != 0 {
-		return Civ6StatusRunningDX11
+		return BG3StatusRunningDX11
 	}
 
-	dx12 := C.get_civ6_dx12_proc()
+	dx12 := C.get_bg3_dx12_proc()
 	if dx12 != 0 {
-		return Civ6StatusRunningDX12
+		return BG3StatusRunningDX12
 	}
 
-	return Civ6StatusNotFound
+	return BG3StatusNotFound
 }
 
 type InjectStatus int
@@ -75,23 +75,23 @@ func IsAdmin() bool {
 	return isAdmin
 }
 
-func IsCiv6Injected() InjectStatus {
+func Isbg3Injected() InjectStatus {
 	dllCstr := C.CString("hookdll64.dll")
 	defer C.free(unsafe.Pointer(dllCstr))
-	pid := C.get_civ6_proc()
+	pid := C.get_bg3_proc()
 	handle := C.find_module_handle_from_pid(pid, dllCstr)
 	if C.is_null(handle) {
 		return InjectStatusNotInjected
 	}
-	if C.is_injciv6_running(pid) {
+	if C.is_injbg3_running(pid) {
 		return InjectStatusRunningIPv6
 	}
 	return InjectStatusInjected
 }
 
-func GetCiv6Path() (string, error) {
+func GetBG3Path() (string, error) {
 	buf := make([]uint16, 4096) // LPWSTR
-	success := C.get_civ6_path((*C.wchar_t)(unsafe.Pointer(&buf[0])), C.ulong(len(buf)))
+	success := C.get_bg3_path((*C.wchar_t)(unsafe.Pointer(&buf[0])), C.ulong(len(buf)))
 	str := syscall.UTF16ToString(buf)
 	if !success {
 		str = strings.TrimSpace(str)
@@ -102,8 +102,8 @@ func GetCiv6Path() (string, error) {
 	return str, nil
 }
 
-func GetCiv6Dir() (string, error) {
-	path, err := GetCiv6Path()
+func Getbg3Dir() (string, error) {
+	path, err := GetBG3Path()
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +119,7 @@ func GetCurrentDir() string {
 }
 
 func GetInjectorPath() (string, bool) {
-	path := filepath.Join(GetCurrentDir(), "injciv6.exe")
+	path := filepath.Join(GetCurrentDir(), "injbg3.exe")
 	_, err := os.Stat(path)
 	if err != nil {
 		return "", false
@@ -128,7 +128,7 @@ func GetInjectorPath() (string, bool) {
 }
 
 func GetInjectRemoverPath() (string, bool) {
-	path := filepath.Join(GetCurrentDir(), "civ6remove.exe")
+	path := filepath.Join(GetCurrentDir(), "bg3remove.exe")
 	_, err := os.Stat(path)
 	if err != nil {
 		return "", false
@@ -137,11 +137,11 @@ func GetInjectRemoverPath() (string, bool) {
 }
 
 func WriteConfig(address string) error {
-	dir, err := GetCiv6Dir()
+	dir, err := Getbg3Dir()
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(dir, "injciv6-config.txt")
+	path := filepath.Join(dir, "injbg3-config.txt")
 
 	// Modify or create the file
 	if err := os.WriteFile(path, []byte(address), 0644); err != nil {
@@ -152,11 +152,11 @@ func WriteConfig(address string) error {
 }
 
 func ReadConfig() (string, error) {
-	dir, err := GetCiv6Dir()
+	dir, err := Getbg3Dir()
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, "injciv6-config.txt")
+	path := filepath.Join(dir, "injbg3-config.txt")
 
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return "", nil // File not exist

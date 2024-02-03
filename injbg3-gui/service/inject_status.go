@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"injciv6-gui/utils"
+	"injbg3-gui/utils"
 	"sync"
 	"time"
 )
@@ -40,7 +40,7 @@ func (g *InjectStatusService) IsInjected() utils.InjectStatus {
 
 func (g *InjectStatusService) UpdateStatus() {
 	status := g.IsInjected()
-	new_status := utils.IsCiv6Injected()
+	new_status := utils.Isbg3Injected()
 
 	g.lock.Lock()
 	g.status = new_status
