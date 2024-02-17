@@ -115,7 +115,7 @@ struct SockAddrIn {
         return (sockaddr *)&addr;
     }
 
-    int get_family() const {
+    u_short get_family() const {
         return get_sockaddr()->sa_family;
     }
 
@@ -123,7 +123,7 @@ struct SockAddrIn {
         return get_len(get_family());
     }
 
-    static int get_len(int family) {
+    static int get_len(u_short family) {
         switch (family) {
         case AF_INET:
             return sizeof(sockaddr_in);
@@ -135,7 +135,7 @@ struct SockAddrIn {
     }
 
     std::string get_ip() const {
-        int family = get_family();
+        u_short family = get_family();
         switch (family) {
         case AF_INET:
             return std::to_string(addr.addr_v4.sin_addr);
@@ -145,21 +145,25 @@ struct SockAddrIn {
             return "";
         }
     }
-    
-    int get_port() const {
-        int family = get_family();
+
+    u_short get_port_raw() const {
+        u_short family = get_family();
         switch (family) {
         case AF_INET:
-            return _ntohs(addr.addr_v4.sin_port);
+            return addr.addr_v4.sin_port;
         case AF_INET6:
-            return _ntohs(addr.addr_v6.sin6_port);
+            return addr.addr_v6.sin6_port;
         default:
             return 0;
         }
     }
 
+    void set_family(u_short family) {
+        get_sockaddr()->sa_family = family;
+    }
+
     void set_ip_any() {
-        int family = get_family();
+        u_short family = get_family();
         if (family == AF_INET) {
             addr.addr_v4.sin_addr.s_addr = INADDR_ANY;
         } else if (family == AF_INET6) {
@@ -167,8 +171,8 @@ struct SockAddrIn {
         }
     }
 
-    void set_port_raw(USHORT port) {
-        int family = get_family();
+    void set_port_raw(u_short port) {
+        u_short family = get_family();
         if (family == AF_INET) {
             addr.addr_v4.sin_port = port;
         } else if (family == AF_INET6) {
@@ -179,7 +183,7 @@ struct SockAddrIn {
 
 namespace std {
     std::string to_string(const SockAddrIn &addr) {
-        return addr.get_ip() + ":" + std::to_string(addr.get_port());
+        return addr.get_ip() + ":" + std::to_string(_ntohs(addr.get_port_raw()));
     }
 }
 
@@ -230,67 +234,150 @@ struct FakeAddrPool {
         }
     };
 
-    std::map<IPv4Addr, IPv6Addr> v4_to_v6;
-    std::map<IPv6Addr, IPv4Addr> v6_to_v4;
-    ULONG start;
-    ULONG end;
-    ULONG current;
+    struct IPAddr {
+        short family;
+        union UnionIP {
+            IPv4Addr ipv4;
+            IPv6Addr ipv6;
+            UnionIP(IPv4Addr addr) : ipv4(addr) {}
+            UnionIP(IPv6Addr addr) : ipv6(addr) {}
+        } ip;
 
-    FakeAddrPool(ULONG start, ULONG len) {
+        IPAddr() : family(AF_INET), ip(IPv4Addr()) {}
+
+        IPAddr(const in_addr& addr) : family(AF_INET), ip(IPv4Addr(addr)) {}
+
+        IPAddr(const IPv4Addr& addr) : family(AF_INET), ip(addr) {}
+
+        IPAddr(const in6_addr& addr) : family(AF_INET6), ip(IPv6Addr(addr)) {}
+
+        IPAddr(const IPv6Addr& addr) : family(AF_INET6), ip(addr) {}
+
+        bool operator<(const IPAddr& other) const {
+            if (family != other.family) {
+                return family < other.family;
+            }
+            if (family == AF_INET) {
+                return ip.ipv4 < other.ip.ipv4;
+            }
+            return ip.ipv6 < other.ip.ipv6;
+        }
+
+        bool operator==(const IPAddr& other) const {
+            if (family != other.family) {
+                return false;
+            }
+            if (family == AF_INET) {
+                return ip.ipv4 == other.ip.ipv4;
+            }
+            return ip.ipv6 == other.ip.ipv6;
+        }
+    };
+
+    std::map<IPv4Addr, IPAddr> fake_to_real;
+    std::map<IPAddr, IPv4Addr> real_to_fake;
+    in_addr start;
+    in_addr end;
+    in_addr current;
+
+    FakeAddrPool(in_addr start, u_long range) {
         this->start = start;
-        this->end = this->start + len;
-        this->current = this->start;
+        this->end = next(start, range);
+        this->current = start;
+    }
+
+    sockaddr_in get_fake_addr(const SockAddrIn& addr) {
+        switch (addr.get_family()) {
+        case AF_INET:
+            return get_fake_addr(IPv4Addr(addr.addr.addr_v4.sin_addr));
+        case AF_INET6:
+            return get_fake_addr(IPv6Addr(addr.addr.addr_v6.sin6_addr));
+        default:
+            sockaddr_in fake_addr;
+            memset(&fake_addr, 0, sizeof(fake_addr));
+            return fake_addr;
+        }
     }
 
     sockaddr_in get_fake_addr(const sockaddr_in6 *addr) {
-        ULONG fake_ip;
         IPv6Addr addr6(addr->sin6_addr);
-        if (v6_to_v4.count(addr6)) {
-            fake_ip = v6_to_v4[addr6].addr.s_addr;
+        return get_fake_addr(addr6);
+    }
+
+    sockaddr_in get_fake_addr(const sockaddr_in *addr) {
+        IPv4Addr addr4(addr->sin_addr);
+        return get_fake_addr(addr4);
+    }
+
+    sockaddr_in get_fake_addr(const IPAddr& addr) {
+        in_addr fake_ip;
+        if (real_to_fake.count(addr)) {
+            fake_ip = real_to_fake[addr].addr;
         } else {
             fake_ip = search_available_addr(current);
             IPv4Addr addr4(fake_ip);
-            v6_to_v4[addr6] = addr4;
-            v4_to_v6[addr4] = addr6;
+            real_to_fake[addr] = addr4;
+            fake_to_real[addr4] = addr;
         }
         sockaddr_in fake_addr;
         memset(&fake_addr, 0, sizeof(fake_addr));
         fake_addr.sin_family = AF_INET;
-        fake_addr.sin_addr.S_un.S_addr = fake_ip;
+        fake_addr.sin_addr = fake_ip;
         return fake_addr;
     }
 
-    sockaddr_in6 get_origin_addr(const sockaddr_in *addr) {
-        sockaddr_in6 origin_addr;
-        memset(&origin_addr, 0, sizeof(origin_addr));
+    SockAddrIn get_origin_addr(const sockaddr_in *addr) {
+        SockAddrIn origin_addr;
         IPv4Addr addr4(addr->sin_addr);
-        if (v4_to_v6.count(addr4)) {
-            IPv6Addr addr6 = v4_to_v6[addr4];
-            origin_addr.sin6_family = AF_INET6;
-            origin_addr.sin6_addr = addr6.addr;
+        if (fake_to_real.count(addr4)) {
+            IPAddr addr = fake_to_real[addr4];
+            switch (addr.family) {
+            case AF_INET:
+                origin_addr.addr.addr_v4.sin_family = AF_INET;
+                origin_addr.addr.addr_v4.sin_addr = addr.ip.ipv4.addr;
+                break;
+            case AF_INET6:
+                origin_addr.addr.addr_v6.sin6_family = AF_INET6;
+                origin_addr.addr.addr_v6.sin6_addr = addr.ip.ipv6.addr;
+                break;
+            }
         }
         return origin_addr;
     }
 
     bool has_origin_addr(const sockaddr_in *addr) {
-        return v4_to_v6.count(IPv4Addr(addr->sin_addr));
+        return fake_to_real.count(IPv4Addr(addr->sin_addr));
     }
 
-    ULONG search_available_addr(ULONG search_start) {
-        if (!v4_to_v6.count(IPv4Addr(search_start))) {
+    in_addr search_available_addr(in_addr search_start) {
+        if (!fake_to_real.count(IPv4Addr(search_start))) {
             return search_start;
         }
-        ULONG addr = search_start + 1;
-        while (addr != search_start) {
-            if (!v4_to_v6.count(IPv4Addr(addr))) {
+        in_addr addr = next(search_start);
+        while (memcmp(&addr, &search_start, sizeof(in_addr)) != 0) {
+            if (!fake_to_real.count(IPv4Addr(addr))) {
                 return addr;
             }
-            addr++;
-            if (addr == end) {
+            addr = next(addr);
+            if (memcmp(&addr, &search_start, sizeof(in_addr)) == 0) {
                 addr = start;
             }
         }
         return search_start;
+    }
+
+    in_addr next(const in_addr& addr, int step = 1) {
+        ULONG hl = (ULONG)addr.S_un.S_un_b.s_b1 << 24 |
+                   (ULONG)addr.S_un.S_un_b.s_b2 << 16 |
+                   (ULONG)addr.S_un.S_un_b.s_b3 << 8 |
+                   (ULONG)addr.S_un.S_un_b.s_b4;
+        hl += step;
+        in_addr next_addr;
+        next_addr.S_un.S_un_b.s_b1 = (unsigned char)(hl >> 24);
+        next_addr.S_un.S_un_b.s_b2 = (unsigned char)(hl >> 16);
+        next_addr.S_un.S_un_b.s_b3 = (unsigned char)(hl >> 8);
+        next_addr.S_un.S_un_b.s_b4 = (unsigned char)hl;
+        return next_addr;
     }
 };
 
@@ -298,7 +385,7 @@ struct FakeAddrPool {
 #define LOG_ENABLE
 
 static const ULONG FAKE_IP_RANGE = 100;
-static const ULONG FAKE_IP_START = 0x017F007F; // 127.0.127.1
+static const IN_ADDR FAKE_IP_START = {127, 0, 127, 1};
 
 typedef int WINAPI(*sendto_func) (SOCKET, const char *, int, int, const sockaddr *, int);
 typedef int WINAPI(*select_func) (int, fd_set *, fd_set *, fd_set *, const TIMEVAL *);
@@ -442,20 +529,21 @@ static int WINAPI fake_wsasendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCou
 {
     sockaddr_in *origin_to = (sockaddr_in *)lpTo;
     if (fake_addr_pool.has_origin_addr(origin_to)) {
-        sockaddr_in6 new_to = fake_addr_pool.get_origin_addr(origin_to);
-        new_to.sin6_port = origin_to->sin_port;
-        int result = _wsasendto(socks[s], lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, (sockaddr *)&new_to, sizeof(sockaddr_in6), lpOverlapped, lpCompletionRoutine);
+        SockAddrIn new_to = fake_addr_pool.get_origin_addr(origin_to);
+        new_to.set_port_raw(origin_to->sin_port);
+        SOCKET new_sock = socks.count(s) ? socks[s] : s;
+        int result = _wsasendto(new_sock, lpBuffers, dwBufferCount, lpNumberOfBytesSent, dwFlags, (sockaddr *)&new_to, sizeof(sockaddr_in6), lpOverlapped, lpCompletionRoutine);
 
 #ifdef LOG_ENABLE
         if (result == SOCKET_ERROR) {
             int errorcode = _wsagetlasterror();
-            write_log("fake-ip  wsasendto failed: %s -> %s, through: %s, %d -> %d, result: %d, errorcode: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(SockAddrIn::from_socket(socks[s])).c_str(), s, socks[s], result, errorcode);
+            write_log("fake-ip  wsasendto failed: %s -> %s, through: %s, %d -> %d, result: %d, errorcode: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(SockAddrIn::from_socket(new_sock)).c_str(), s, new_sock, result, errorcode);
         }
 #endif
 
 #ifdef DEBUG_ENABLE
-        SockAddrIn local_addr = SockAddrIn::from_socket(socks[s]);
-        write_debug("fake-ip  wsasendto: %s -> %s, through: %s, %d -> %d, result: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(local_addr).c_str(), s, socks[s], result);
+        SockAddrIn local_addr = SockAddrIn::from_socket(new_sock);
+        write_debug("fake-ip  wsasendto: %s -> %s, through: %s, %d -> %d, result: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(local_addr).c_str(), s, new_sock, result);
 #endif
 
         return result;
@@ -466,7 +554,7 @@ static int WINAPI fake_wsasendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCou
 #ifdef DEBUG_ENABLE
     if (result == SOCKET_ERROR) {
         int errorcode = _wsagetlasterror();
-        write_debug("original wsasendto failed: %d\n", errorcode);
+        write_debug("original wsasendto failed: %s, %d, errorcode: %d\n", std::to_string(*origin_to).c_str(), s, errorcode);
     }
     write_debug("original wsasendto: %s, %d, result: %d\n", std::to_string(*origin_to).c_str(), s, result);
 #endif
@@ -489,23 +577,10 @@ static int WINAPI fake_wsarecvfrom(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferC
 #endif
         if (result == SOCKET_ERROR) return result;
 
-        switch (new_from.get_family()) {
-        case AF_INET: // 如果是v4地址，直接返回
-            {
-                memcpy(lpFrom, &new_from.addr.addr_v4, sizeof(sockaddr_in));
-                break;
-            }
-        case AF_INET6: // 如果是v6地址，替换成v4的fake-ip地址
-            {
-                sockaddr_in fake_from = fake_addr_pool.get_fake_addr((sockaddr_in6 *)&new_from.addr.addr_v6);
-                fake_from.sin_port = new_from.addr.addr_v6.sin6_port;
-                memcpy(lpFrom, &fake_from, sizeof(sockaddr_in));
-                *lpFromlen = sizeof(sockaddr_in);
-                break;
-            }
-        default:
-            write_log("unknown address family while wsarecvfrom: %d, %d -> %d\n", new_from.get_family(), s, socks[s]);
-        }
+        sockaddr_in fake_from = fake_addr_pool.get_fake_addr(new_from);
+        fake_from.sin_port = new_from.get_port_raw();
+        memcpy(lpFrom, &fake_from, sizeof(sockaddr_in));
+        *lpFromlen = sizeof(sockaddr_in);
 
 #ifdef DEBUG_ENABLE
         if (result != SOCKET_ERROR) {
@@ -514,7 +589,7 @@ static int WINAPI fake_wsarecvfrom(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferC
             write_debug("redirect wsarecvfrom: %s -> %s, from: %s, %d -> %d, result: %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), std::to_string(new_from).c_str(), s, socks[s], result);
             if (new_from.get_family() == AF_INET6) {
                 write_debug("    fake-ip: %s -> %s\n", std::to_string(new_from).c_str(), std::to_string(*((sockaddr_in *)lpFrom)).c_str());
-            } 
+            }
         }
 #endif
 
@@ -523,10 +598,16 @@ static int WINAPI fake_wsarecvfrom(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferC
     // 非替换的socket，原样接收
     int result = _wsarecvfrom(s, lpBuffers, dwBufferCount, lpNumberOfBytesRecvd, lpFlags, lpFrom, lpFromlen, lpOverlapped, lpCompletionRoutine);
 
+    sockaddr_in *origin_from = (sockaddr_in *)lpFrom;
+    sockaddr_in fake_from = fake_addr_pool.get_fake_addr(origin_from);
+    fake_from.sin_port = origin_from->sin_port;
+    memcpy(lpFrom, &fake_from, sizeof(sockaddr_in));
+    *lpFromlen = sizeof(sockaddr_in);
+
 #ifdef DEBUG_ENABLE
     if (result == SOCKET_ERROR) {
         int errorcode = _wsagetlasterror();
-        write_debug("original wsarecvfrom failed: %d\n", errorcode);
+        if (errorcode != WSAEWOULDBLOCK) write_debug("original wsarecvfrom failed: %s, %d, errorcode: %d\n", std::to_string(SockAddrIn::from_socket(s)).c_str(), s, errorcode);
     }
     if (result != SOCKET_ERROR) write_debug("original wsarecvfrom: %s, %d, result: %d\n", std::to_string(*((sockaddr_in *)lpFrom)).c_str(), s, result);
 #endif
@@ -578,7 +659,15 @@ static int WINAPI fake_bind(SOCKET s, const sockaddr *addr, int addrlen)
             write_debug("replace origin_bind: %s -> %s, %d -> %d\n", std::to_string(origin_addr_v4).c_str(), std::to_string(new_addr_v6).c_str(), s, sock);
         }
     }
-    return _bind(s, addr, addrlen);
+    int result = _bind(s, addr, addrlen);
+#ifdef DEBUG_ENABLE
+    if (result == SOCKET_ERROR) {
+        int errorcode = _wsagetlasterror();
+        write_debug("original bind failed: %s, %d, errorcode: %d\n", std::to_string(SockAddrIn::from_sockaddr(addr)).c_str(), s, errorcode);
+    }
+    write_debug("original bind: %s, %d, result: %d\n", std::to_string(SockAddrIn::from_sockaddr(addr)).c_str(), s, result);
+#endif
+    return result;
 }
 
 static int WINAPI fake_closesocket(SOCKET s)
@@ -597,9 +686,10 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
     sockaddr_in *origin_to = (sockaddr_in *)to;
 
     if (fake_addr_pool.has_origin_addr(origin_to)) {
-        sockaddr_in6 new_to = fake_addr_pool.get_origin_addr(origin_to);
-        new_to.sin6_port = origin_to->sin_port;
-        int result = _sendto(socks[s], buf, len, flags, (sockaddr *)&new_to, sizeof(sockaddr_in6));
+        SockAddrIn new_to = fake_addr_pool.get_origin_addr(origin_to);
+        new_to.set_port_raw(origin_to->sin_port);
+        SOCKET new_sock = socks.count(s) ? socks[s] : s;
+        int result = _sendto(new_sock, buf, len, flags, (sockaddr *)&new_to, sizeof(sockaddr_in6));
 #ifdef LOG_ENABLE
         if (result == SOCKET_ERROR) {
             int errorcode = _wsagetlasterror();
@@ -608,7 +698,7 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
 #endif
 
 #ifdef DEBUG_ENABLE
-        SockAddrIn local_addr = SockAddrIn::from_socket(socks[s]);
+        SockAddrIn local_addr = SockAddrIn::from_socket(new_sock);
         write_debug("fake-ip  sendto: %s -> %s, through: %s, %d -> %d, result: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(local_addr).c_str(), s, socks[s], result);
 #endif
 
@@ -661,7 +751,9 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
     }
     new_to.set_port_raw(origin_to->sin_port);
 
-    if (!socks.count(s)) {
+    SOCKET new_sock = socks.count(s) ? socks[s] : s;
+
+    if (new_to.get_family() == AF_INET6) {
         // 获取原sockaddr
         sockaddr_in origin_local_addr;
         origin_local_addr.sin_family = AF_INET;
@@ -682,7 +774,7 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
 #ifdef LOG_ENABLE
         if (sock == INVALID_SOCKET) {
             int errorcode = _wsagetlasterror();
-            write_log("create socket failed while sendto: %s -> %s, %d -> %d, result: %d, errorcode: %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock, result, errorcode);
+            write_log("create socket failed while sendto: %s -> %s, %d -> %d, errorcode: %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock, errorcode);
             return SOCKET_ERROR;
         }
 #endif
@@ -693,18 +785,30 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
         _setsockopt(sock, SOL_SOCKET, SO_BROADCAST, (char *)&opt, sizeof(BOOL)); // 允许发送广播
         _setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char *)&opt, sizeof(BOOL)); // 重用地址端口
 
-        _bind(sock, new_local_addr.get_sockaddr(), new_local_addr.get_len()); // 绑定地址端口
+        result = _bind(sock, new_local_addr.get_sockaddr(), new_local_addr.get_len()); // 绑定地址端口
+#ifdef LOG_ENABLE
+        if (result == SOCKET_ERROR) {
+            int errorcode = _wsagetlasterror();
+            write_log("bind failed while sendto: %s -> %s, %d -> %d, errorcode: %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock, errorcode);
+            return SOCKET_ERROR;
+        }
+#endif
 
         socks[s] = sock;
 
         write_socks();
         write_debug("replace origin_sock: %s -> %s, %d -> %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), s, sock);
+
+        new_sock = sock;
     }
 
-    SOCKET new_sock = socks[s];
     result = _sendto(new_sock, buf, len, flags, new_to.get_sockaddr(), new_to.get_len());
 
 #ifdef DEBUG_ENABLE
+    if (result == SOCKET_ERROR) {
+        int errorcode = _wsagetlasterror();
+        write_debug("redirect sendto failed: %s -> %s, through: %s, %d -> %d, errorcode: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(SockAddrIn::from_socket(new_sock)).c_str(), s, new_sock, errorcode);
+    }
     SockAddrIn local_addr = SockAddrIn::from_socket(new_sock);
     if (result > 0) write_debug("redirect sendto: %s -> %s, through: %s, %d -> %d, result: %d\n", std::to_string(*origin_to).c_str(), std::to_string(new_to).c_str(), std::to_string(local_addr).c_str(), s, new_sock, result);
 #endif
@@ -739,41 +843,38 @@ static int WINAPI fake_recvfrom(SOCKET s, char *buf, int len, int flags, sockadd
         int new_from_len = sizeof(new_from.addr);
         int result = _recvfrom(socks[s], buf, len, flags, new_from.get_sockaddr(), &new_from_len);
         if (result == SOCKET_ERROR) return result;
-        switch (new_from.get_family()) {
-        case AF_INET: // 如果是v4地址，直接返回
-            {
-                memcpy(from, &new_from.addr.addr_v4, sizeof(sockaddr_in));
-                break;
-            }
-        case AF_INET6: // 如果是v6地址，替换成v4的fake-ip地址
-            {
-                sockaddr_in fake_from = fake_addr_pool.get_fake_addr((sockaddr_in6 *)&new_from.addr.addr_v6);
-                fake_from.sin_port = new_from.addr.addr_v6.sin6_port;
-                memcpy(from, &fake_from, sizeof(sockaddr_in));
-                *fromlen = sizeof(sockaddr_in);
-                break;
-            }
-        default:
-            write_log("unknown address family: %d, %d -> %d\n", new_from.get_family(), s, socks[s]);
-        }
+
+        sockaddr_in fake_from = fake_addr_pool.get_fake_addr(new_from);
+        fake_from.sin_port = new_from.get_port_raw();
+        memcpy(from, &fake_from, sizeof(sockaddr_in));
+        *fromlen = sizeof(sockaddr_in);
+
 #ifdef DEBUG_ENABLE
         if (result > 0) {
             SockAddrIn origin_local_addr = SockAddrIn::from_socket(s);
             SockAddrIn new_local_addr = SockAddrIn::from_socket(socks[s]);
             write_debug("redirect recvfrom: %s -> %s, from: %s, %d -> %d, result: %d\n", std::to_string(origin_local_addr).c_str(), std::to_string(new_local_addr).c_str(), std::to_string(new_from).c_str(), s, socks[s], result);
-            if (new_from.get_family() == AF_INET6) {
-                write_debug("    fake-ip: %s -> %s\n", std::to_string(new_from).c_str(), std::to_string(*((sockaddr_in *)from)).c_str());
-            } 
+            write_debug("    fake-ip: %s -> %s\n", std::to_string(new_from).c_str(), std::to_string(*((sockaddr_in *)from)).c_str());
         }
 #endif
+
         return result;
     }
     // 非替换的socket，原样接收
     int result = _recvfrom(s, buf, len, flags, from, fromlen);
+    if (result > 0) {
+        write_debug("original recvfrom: %s, %d, result: %d\n", std::to_string(*((sockaddr_in *)from)).c_str(), s, result);
+    }
 
-#ifdef DEBUG_ENABLE
-    if (result > 0) write_debug("original recvfrom: %s, %d, result: %d\n", std::to_string(*((sockaddr_in *)from)).c_str(), s, result);
-#endif
+    sockaddr_in *origin_from = (sockaddr_in *)from;
+    sockaddr_in fake_from = fake_addr_pool.get_fake_addr(origin_from);
+    fake_from.sin_port = origin_from->sin_port;
+    memcpy(from, &fake_from, sizeof(sockaddr_in));
+    *fromlen = sizeof(sockaddr_in);
+
+    if (result > 0) {
+        write_debug("    fake-ip: %s -> %s\n", std::to_string(*origin_from).c_str(), std::to_string(*((sockaddr_in *)from)).c_str());
+    }
 
     return result;
 }
