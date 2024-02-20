@@ -5,21 +5,22 @@
 
 int main(int argc, char *argv[])
 {
+    wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
     bool silence = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-s") == 0) silence = true;
     }
-    char dll_path[MAX_PATH];
-    strcpy(dll_path, argv[0]);
-    int pos = strlen(dll_path) - 1;
+    wchar_t dll_path[MAX_PATH];
+    wcscpy_s(dll_path, MAX_PATH, wargv[0]);
+    int pos = wcslen(dll_path);
     while (pos > 0) {
-        if (dll_path[pos] == '\\')
+        if (dll_path[pos] == L'\\')
             break;
         pos--;
     }
-    dll_path[pos + 1] = '\0';
-    strcat(dll_path, "hookdll64.dll");
-    FILE *fp = fopen(dll_path, "rb");
+    dll_path[pos + 1] = L'\0';
+    wcscat_s(dll_path, MAX_PATH, L"hookdll64.dll");
+    FILE *fp = _wfopen(dll_path, L"rb");
     if (fp == NULL) {
         MessageBoxW(0, L"找不到hookdll64.dll", L"错误", MB_ICONERROR);
         return 0;
@@ -44,7 +45,7 @@ int main(int argc, char *argv[])
             return 0;
     }
     bool reinj = false;
-    HMODULE dll = find_module_handle_from_pid(civ6pid, "hookdll64.dll");
+    HMODULE dll = find_module_handle_from_pid(civ6pid, L"hookdll64.dll");
     if (dll != 0) {
         msgres = IDYES;
         if (!silence)
@@ -53,7 +54,7 @@ int main(int argc, char *argv[])
             return 0;
         if (!isadmin) {
         retry_runas_silence:
-            if (runas_admin(argv[0], "-s")) // 成功运行就退出自己
+            if (runas_admin(wargv[0], L"-s")) // 成功运行就退出自己
                 return 0;
             msgres = MessageBoxW(0, L"请允许管理员权限", L"错误", MB_ICONERROR | MB_RETRYCANCEL);
             if (msgres == IDRETRY)
@@ -92,7 +93,7 @@ retry_inject:
     msgres = MessageBoxW(0, L"注入失败，是否以管理员权限重试？", L"错误", MB_ICONERROR | MB_RETRYCANCEL);
     if (msgres == IDRETRY) {
     retry_runas:
-        if (runas_admin(argv[0])) // 成功运行就退出自己
+        if (runas_admin(wargv[0])) // 成功运行就退出自己
             return 0;
         msgres = MessageBoxW(0, L"请在弹出的窗口中点击“是”", L"错误", MB_ICONERROR | MB_RETRYCANCEL);
         if (msgres == IDRETRY)

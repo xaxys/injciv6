@@ -32,9 +32,9 @@ bool grant_se_debug_privilege()
     return true;
 }
 
-bool inject_dll(DWORD pid, const char *dll_path)
+bool inject_dll(DWORD pid, const wchar_t *dll_path)
 {
-    int path_len = strlen(dll_path) + 1;
+    int path_len = (wcslen(dll_path) + 1) * sizeof(wchar_t);
     HANDLE hproc = 0;
     LPVOID pmem = NULL;
     HANDLE hthread = 0;
@@ -44,7 +44,7 @@ bool inject_dll(DWORD pid, const char *dll_path)
     pmem = VirtualAllocEx(hproc, NULL, path_len, MEM_COMMIT, PAGE_READWRITE); // 申请内存
     if (pmem == NULL) goto finally;
     WriteProcessMemory(hproc, pmem, dll_path, path_len, NULL); // 把dll路径写进去
-    hthread = CreateRemoteThread(hproc, NULL, 0, (LPTHREAD_START_ROUTINE)LoadLibraryA, pmem, 0, NULL); // 创建远程线程注入
+    hthread = CreateRemoteThread(hproc, NULL, 0, (LPTHREAD_START_ROUTINE)LoadLibraryW, pmem, 0, NULL); // 创建远程线程注入
     if (hthread == 0) goto finally;
     WaitForSingleObject(hthread, INFINITE); // 等待线程执行
     DWORD threadres;
@@ -61,18 +61,18 @@ bool inject_dll(DWORD pid, const char *dll_path)
     return result;
 }
 
-DWORD find_pid_by_name(const char *name)
+DWORD find_pid_by_name(const wchar_t *name)
 {
     HANDLE procsnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-    PROCESSENTRY32 procentry;
-    procentry.dwSize = sizeof(PROCESSENTRY32);
-    Process32First(procsnapshot, &procentry);
-    if (strcmp(procentry.szExeFile, name) == 0) {
+    PROCESSENTRY32W procentry;
+    procentry.dwSize = sizeof(PROCESSENTRY32W);
+    Process32FirstW(procsnapshot, &procentry);
+    if (wcscmp(procentry.szExeFile, name) == 0) {
         CloseHandle(procsnapshot);
         return procentry.th32ProcessID;
     }
-    while (Process32Next(procsnapshot, &procentry)) {
-        if (strcmp(procentry.szExeFile, name) == 0) {
+    while (Process32NextW(procsnapshot, &procentry)) {
+        if (wcscmp(procentry.szExeFile, name) == 0) {
             CloseHandle(procsnapshot);
             return procentry.th32ProcessID;
         }
@@ -81,21 +81,22 @@ DWORD find_pid_by_name(const char *name)
     return 0;
 }
 
-HMODULE find_module_handle_from_pid(DWORD pid, const char *module_name)
+HMODULE find_module_handle_from_pid(DWORD pid, const wchar_t *module_name)
 {
     HMODULE h_result = 0;
     HANDLE hsnap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
-    MODULEENTRY32 module_entry;
-    module_entry.dwSize = sizeof(MODULEENTRY32);
-    Module32First(hsnap, &module_entry);
+    MODULEENTRY32W module_entry;
+    module_entry.dwSize = sizeof(MODULEENTRY32W);
+    Module32FirstW(hsnap, &module_entry);
     do {
-        if (strcmp(module_entry.szModule, module_name) == 0) {
+        if (wcscmp(module_entry.szModule, module_name) == 0) {
             h_result = module_entry.hModule;
             break;
         }
-    } while (Module32Next(hsnap, &module_entry));
+    } while (Module32NextW(hsnap, &module_entry));
     CloseHandle(hsnap);
     return h_result;
+
 }
 
 bool remove_module(DWORD pid, HMODULE module_handle)

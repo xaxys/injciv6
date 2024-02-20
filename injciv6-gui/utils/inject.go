@@ -76,10 +76,11 @@ func IsAdmin() bool {
 }
 
 func IsCiv6Injected() InjectStatus {
-	dllCstr := C.CString("hookdll64.dll")
-	defer C.free(unsafe.Pointer(dllCstr))
+	dllName := "hookdll64.dll"
+	dllNameW, _ := syscall.UTF16FromString(dllName)
+	dllCstrW := (*C.wchar_t)(unsafe.Pointer(&dllNameW[0]))
 	pid := C.get_civ6_proc()
-	handle := C.find_module_handle_from_pid(pid, dllCstr)
+	handle := C.find_module_handle_from_pid(pid, dllCstrW)
 	if C.is_null(handle) {
 		return InjectStatusNotInjected
 	}

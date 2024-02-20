@@ -4,11 +4,12 @@
 
 int main(int argc, char *argv[])
 {
+    wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
     bool isadmin = IsUserAnAdmin();
     int msgres = 0;
     if (!isadmin) {
     retry_runas:
-        if (runas_admin(argv[0])) // 成功运行就退出自己
+        if (runas_admin(wargv[0])) // 成功运行就退出自己
             return 0;
         msgres = MessageBoxW(0, L"请允许管理员权限", L"错误", MB_ICONERROR | MB_RETRYCANCEL);
         if (msgres == IDRETRY)
@@ -26,7 +27,7 @@ int main(int argc, char *argv[])
         MessageBoxW(0, L"找不到游戏进程", L"错误", MB_ICONERROR);
         return 0;
     }
-    module_handle = find_module_handle_from_pid(pid, "hookdll64.dll");
+    module_handle = find_module_handle_from_pid(pid, L"hookdll64.dll");
     if (module_handle == 0) {
         MessageBoxW(0, L"当前没有注入DLL", L"错误", MB_ICONERROR);
         return 0;
@@ -35,4 +36,6 @@ int main(int argc, char *argv[])
         MessageBoxW(0, L"成功移除DLL！", L"成功", MB_OK);
     else
         msgres = MessageBoxW(0, L"移除失败", L"错误", MB_ICONERROR);
+
+    return 0;
 }

@@ -22,11 +22,11 @@ bool runas_admin(LPCWSTR exename) {
 }
 
 DWORD get_civ6_dx11_proc() {
-    return find_pid_by_name("CivilizationVI.exe");
+    return find_pid_by_name(L"CivilizationVI.exe");
 }
 
 DWORD get_civ6_dx12_proc() {
-    return find_pid_by_name("CivilizationVI_DX12.exe");
+    return find_pid_by_name(L"CivilizationVI_DX12.exe");
 }
 
 DWORD get_civ6_proc() {

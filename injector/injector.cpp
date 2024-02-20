@@ -5,10 +5,10 @@
 #include <windows.h>
 
 #ifdef _CPU_X64
-#define DLL_NAME "hookdll64.dll"
+#define DLL_NAME L"hookdll64.dll"
 #endif
 #ifdef _CPU_X86
-#define DLL_NAME "hookdll32.dll"
+#define DLL_NAME L"hookdll32.dll"
 #endif
 
 void write_help()
@@ -38,12 +38,12 @@ void format_error()
     write_help();
 }
 
-bool doinject(const char *dllpath, char mode, const char *param)
+bool doinject(const wchar_t *dllpath, wchar_t mode, const wchar_t *param)
 {
-    if (!param || *param == '\0')
+    if (!param || *param == L'\0')
         return false;
-    if (mode == 'i') {
-        DWORD pid = atoi(param);
+    if (mode == L'i') {
+        DWORD pid = _wtoi(param);
         if (pid == 0) {
             printf("\"%s\" is not a number\n", param);
             return false;
@@ -54,7 +54,7 @@ bool doinject(const char *dllpath, char mode, const char *param)
         }
         return inject_dll(pid, dllpath);
     }
-    else if (mode == 'x') {
+    else if (mode == L'x') {
         DWORD pid = find_pid_by_name(param);
         if (pid == 0) {
             printf("Can not find process by \"%s\"\n", param);
@@ -67,44 +67,45 @@ bool doinject(const char *dllpath, char mode, const char *param)
 
 int main(int argc, char *argv[])
 {
-    char dll_path[MAX_PATH];
-    GetModuleFileNameA(NULL, dll_path, MAX_PATH);
-    char *pos = strrchr(dll_path, '\\');
-    *(pos + 1) = '\0';
-    strcat(pos, DLL_NAME);
-    FILE *fp = fopen(dll_path, "rb");
+    wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
+    wchar_t dll_path[MAX_PATH];
+    GetModuleFileNameW(NULL, dll_path, MAX_PATH);
+    wchar_t *pos = wcsrchr(dll_path, L'\\');
+    *(pos + 1) = L'\0';
+    wcscat(pos, DLL_NAME);
+    FILE *fp = _wfopen(dll_path, L"rb");
     if (fp == NULL) {
         printf("Can not find DLL \"%s\"\n", dll_path);
         exit(1);
     }
     fclose(fp);
     argc--;
-    argv++;
+    wargv++;
     if (argc == 0)
         write_help();
     bool result = false;
     while (argc--) {
-        if (**argv != '-') {
+        if (**wargv != L'-') {
             format_error();
             return 0;
         }
-        (*argv)++;
-        switch (**argv) {
-            case 'h': write_help(); break;
-            case 's': grant_privilege(); break;
-            case 'i':
-            case 'x':
+        (*wargv)++;
+        switch (**wargv) {
+            case L'h': write_help(); break;
+            case L's': grant_privilege(); break;
+            case L'i':
+            case L'x':
             {
-                char mode = **argv;
-                (*argv)++;
-                if (**argv == '\0' || **argv != '=')
+                wchar_t mode = **wargv;
+                (*wargv)++;
+                if (**wargv == L'\0' || **wargv != L'=')
                     format_error();
-                result = doinject(dll_path, mode, *argv + 1);
+                result = doinject(dll_path, mode, *wargv + 1);
                 break;
             }
             default: format_error(); break;
         }
-        argv++;
+        wargv++;
     }
     if (result) {
         printf("Inject OK\n");
