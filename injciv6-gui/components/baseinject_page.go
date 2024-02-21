@@ -57,7 +57,7 @@ func NewBaseInjectPage(parent walk.Container, cfg *BaseInjectPageCfg) (*BaseInje
 							Label{
 								Font:          Font{Bold: true},
 								AssignTo:      &p.ipv6StatusLabel,
-								Text:          "未知",
+								Text:          "未知（测试中）",
 								TextColor:     ColorGray,
 								Background:    SolidColorBrush{Color: ColorBackground},
 								TextAlignment: AlignNear,
@@ -167,6 +167,11 @@ func (p *BaseInjectPage) OnIPv6StatusChanged(status service.IPv6WithStatus) {
 	p.ipv6StatusLabel.SetSuspended(true)
 	p.ipv6ExplainLabel.SetSuspended(true)
 	switch status.Status {
+	case utils.IPv6StatusUnknown:
+		p.ipv6StatusLabel.SetText("未知（测试中）")
+		p.ipv6StatusLabel.SetTextColor(ColorGray)
+		p.ipv6ExplainLabel.SetVisible(false)
+
 	case utils.IPv6StatusNotSupported:
 		p.ipv6StatusLabel.SetText("不支持")
 		p.ipv6StatusLabel.SetTextColor(ColorRed)
@@ -207,7 +212,7 @@ func (p *BaseInjectPage) OnIPv6StatusChanged(status service.IPv6WithStatus) {
 		p.ipv6ExplainLabel.SetVisible(false)
 
 	default:
-		p.ipv6StatusLabel.SetText("未知")
+		p.ipv6StatusLabel.SetText("其他")
 		p.ipv6StatusLabel.SetTextColor(ColorGray)
 		p.ipv6ExplainLabel.SetVisible(false)
 

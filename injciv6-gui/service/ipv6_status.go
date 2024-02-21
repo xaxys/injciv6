@@ -11,8 +11,10 @@ var IPv6 *IPv6StatusService
 
 func init() {
 	IPv6 = NewIPv6StatusService(2000 * time.Millisecond)
-	IPv6.UpdateStatus()
-	IPv6.StartService()
+	go func() {
+		IPv6.UpdateStatus()
+		IPv6.StartService()
+	}()
 }
 
 type IPv6WithStatus struct {

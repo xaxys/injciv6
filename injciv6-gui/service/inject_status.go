@@ -11,8 +11,10 @@ var Inject *InjectStatusService
 
 func init() {
 	Inject = NewInjectStatusService(500 * time.Millisecond)
-	Inject.UpdateStatus()
-	Inject.StartService()
+	go func() {
+		Inject.UpdateStatus()
+		Inject.StartService()
+	}()
 }
 
 type InjectStatusService struct {

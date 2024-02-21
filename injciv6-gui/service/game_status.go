@@ -11,8 +11,10 @@ var Game *GameStatusService
 
 func init() {
 	Game = NewGameStatusService(500 * time.Millisecond)
-	Game.UpdateStatus()
-	Game.StartService()
+	go func() {
+		Game.UpdateStatus()
+		Game.StartService()
+	}()
 }
 
 type GameStatusService struct {
