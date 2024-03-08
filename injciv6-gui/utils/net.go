@@ -154,7 +154,7 @@ func GetMyIPv6Local() ([]string, error) {
 }
 
 func GetMyIPv6Online() (string, error) {
-	host := "test.ipw.cn"
+	host := "cf-ns.com"
 	ips, err := net.LookupHost(host)
 	if err != nil {
 		return "", err
@@ -174,8 +174,13 @@ func GetMyIPv6Online() (string, error) {
 		return "", fmt.Errorf("No IPv6 DNS record found")
 	}
 
-	url := "http://test.ipw.cn/"
-	resp, err := http.Get(url)
+	url := "https://cf-ns.com/cdn-cgi/trace"
+	client := http.Client{
+		Transport: &http.Transport{
+			Dial: (&net.Dialer{DualStack: true}).Dial,
+		},
+	}
+	resp, err := client.Get(url)
 	if err != nil {
 		return "", err
 	}
@@ -186,6 +191,8 @@ func GetMyIPv6Online() (string, error) {
 		return "", err
 	}
 
+	ipRegex := regexp.MustCompile(`ip=(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|[0-9a-fA-F:]+)`)
+	body = ipRegex.FindSubmatch(body)[1]
 	ip := net.ParseIP(string(body))
 	if ip != nil && ip.To4() == nil && ip.IsGlobalUnicast() {
 		return ip.String(), nil
