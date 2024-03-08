@@ -234,8 +234,8 @@ static int WINAPI fake_sendto(SOCKET s, const char *buf, int len, int flags, con
         new_to.set_port_raw(origin_to->sin_port);
         SOCKET new_sock = socks.count(s) ? socks[s] : s;
 
-        // 如果是IPv6，需要创建新的socket
-        if (new_to.get_family() == AF_INET6) {
+        // 如果是IPv6，并且没有可替换的socket，需要创建新的socket
+        if (!socks.count(s) && new_to.get_family() == AF_INET6) {
             // 获取原socket绑定的地址端口
             sockaddr_in origin_local_addr;
             int origin_local_addr_len = sizeof(sockaddr_in);
@@ -339,8 +339,8 @@ static int WINAPI fake_wsasendto(SOCKET s, LPWSABUF lpBuffers, DWORD dwBufferCou
         new_to.set_port_raw(origin_to->sin_port);
         SOCKET new_sock = socks.count(s) ? socks[s] : s;
 
-        // 如果是IPv6，需要创建新的socket
-        if (new_to.get_family() == AF_INET6) {
+        // 如果是IPv6，并且没有可替换的socket，需要创建新的socket
+        if (!socks.count(s) && new_to.get_family() == AF_INET6) {
             // 获取原socket绑定的地址端口
             sockaddr_in origin_local_addr;
             int origin_local_addr_len = sizeof(sockaddr_in);
